@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "automated-video-control-plane"
+version = "0.1.0"
+description = "Local task and artifact control plane for the automated video workbench"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cryptography==46.0.1",
+  "fastapi==0.116.1",
+  "faster-whisper==1.2.1",
+  "httpx==0.28.1",
+  "jinja2==3.1.6",
+  "pydantic-settings==2.10.1",
+  "pyJianYingDraft==0.3.0",
+  "rapidocr==3.9.2",
+  "onnxruntime==1.29.0",
+  "python-multipart==0.0.20",
+  "sqlmodel==0.0.24",
+  "tzdata==2025.2",
+  "uvicorn[standard]==0.35.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest==8.4.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

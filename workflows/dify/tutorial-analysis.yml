@@ -1,0 +1,130 @@
+app:
+  description: 将教程、转写和画面描述转为可验证的剪辑配方
+  icon: "🎬"
+  icon_background: "#E4FBCC"
+  mode: workflow
+  name: 视频教程拆解
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+  graph:
+    edges:
+      - id: start-source-llm-target
+        source: start
+        sourceHandle: source
+        target: llm
+        targetHandle: target
+        type: custom
+        data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: start
+          targetType: llm
+      - id: llm-source-end-target
+        source: llm
+        sourceHandle: source
+        target: end
+        targetHandle: target
+        type: custom
+        data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: llm
+          targetType: end
+    nodes:
+      - id: start
+        type: custom
+        position: {x: 80, y: 260}
+        positionAbsolute: {x: 80, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 220
+        data:
+          title: 开始
+          desc: 输入教程和素材理解结果
+          type: start
+          selected: false
+          variables:
+            - {label: 教程文本, variable: tutorial_text, type: paragraph, required: true, max_length: 50000, options: []}
+            - {label: 视频转写, variable: transcript, type: paragraph, required: false, max_length: 50000, options: []}
+            - {label: 抽帧画面描述, variable: frame_descriptions, type: paragraph, required: false, max_length: 50000, options: []}
+            - {label: 内容类目, variable: content_category, type: text-input, required: true, max_length: 100, options: []}
+      - id: llm
+        type: custom
+        position: {x: 390, y: 260}
+        positionAbsolute: {x: 390, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 240
+        data:
+          title: 生成剪辑配方
+          desc: 只输出结构化 JSON
+          type: llm
+          selected: false
+          context: {enabled: false, variable_selector: []}
+          memory: null
+          model:
+            provider: langgenius/volcengine/volcengine
+            name: doubao-seed-2-0-pro-260215
+            mode: chat
+            completion_params: {temperature: 0.2, thinking: disabled}
+          prompt_template:
+            - id: tutorial-system
+              role: system
+              text: |-
+                你是短视频剪辑方法分析师。只依据输入的教程、转写和画面描述总结可执行规则，不虚构教程中不存在的要求。
+                只输出一个 JSON 对象，不要 Markdown 代码块。字段必须是：
+                hook_rules(string[])、target_duration_seconds(integer)、pacing({from_second,to_second,instruction}[])、
+                track_layout(string[])、caption_style(string)、audio_rules(string[])、prohibited_elements(string[])、
+                qa_thresholds({max_silence_seconds,max_black_seconds})。
+            - id: tutorial-user
+              role: user
+              text: |-
+                类目：{{#start.content_category#}}
+                教程：{{#start.tutorial_text#}}
+                转写：{{#start.transcript#}}
+                画面描述：{{#start.frame_descriptions#}}
+          structured_output_enabled: false
+          variables: []
+          vision: {enabled: false}
+      - id: end
+        type: custom
+        position: {x: 700, y: 260}
+        positionAbsolute: {x: 700, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 90
+        data:
+          title: 结束
+          desc: 返回剪辑配方 JSON
+          type: end
+          selected: false
+          outputs:
+            - variable: text
+              value_selector: [llm, text]
+    viewport: {x: 0, y: 0, zoom: 1}

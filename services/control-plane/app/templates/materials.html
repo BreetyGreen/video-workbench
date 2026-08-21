@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>授权素材中心</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-3">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-3">
+    <link rel="stylesheet" href="/static/materials.css?v=20260820-3">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'materials' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main material-page">
+      <header class="material-hero">
+        <div>
+          <p class="eyebrow">创作 / 素材中心</p>
+          <h1>授权素材中心</h1>
+          <p>自动剪辑只使用有来源记录的素材：优先调用 Pexels 官方 API，未配置时复用你已确认拥有使用权的本地视频。</p>
+        </div>
+        <a class="hero-action" href="/">返回创作</a>
+      </header>
+
+      <section class="source-strip" aria-label="素材来源状态">
+        <div><strong id="material-total">—</strong><span>已登记素材</span></div>
+        <div><strong id="pexels-state">检查中</strong><span>Pexels 官方接口</span></div>
+        <button id="reindex-button" type="button">同步已确认素材</button>
+      </section>
+
+      <section class="acquire-panel">
+        <div><p class="eyebrow">快速获取</p><h2>输入主题，其余自动完成</h2></div>
+        <form id="material-search-form">
+          <label><span>素材主题</span><input id="material-query" name="query" value="宠物" maxlength="100" required></label>
+          <button type="submit">获取授权素材</button>
+        </form>
+        <p id="material-status" role="status">正在读取素材目录…</p>
+      </section>
+
+      <details class="acquire-panel">
+        <summary><strong>上传授权视频</strong><span>商家给你的商品视频，或你自己拍摄的视频</span></summary>
+        <form id="authorized-video-form" enctype="multipart/form-data">
+          <label><span>视频文件</span><input name="file" type="file" accept="video/*" required></label>
+          <label><span>授权依据</span><input name="rights_basis" maxlength="1000" placeholder="例如：品牌方书面授权 2026-08-21" required></label>
+          <label><span>素材关键词</span><input name="search_text" maxlength="1000" placeholder="例如：宠物 梳毛 商品介绍"></label>
+          <details>
+            <summary>商品与平台信息</summary>
+            <label><span>商品 ID（可选）</span><input name="product_id" maxlength="200"></label>
+            <label><span>允许发布平台</span><input name="allowed_platforms" value="douyin,xiaohongshu" maxlength="500" required></label>
+            <label><span>授权到期时间（可选）</span><input name="rights_expires_at" type="datetime-local"></label>
+            <input name="source_type" type="hidden" value="merchant_authorized">
+          </details>
+          <button type="submit">登记并加入素材库</button>
+        </form>
+      </details>
+
+      <section class="catalog-heading"><div><p class="eyebrow">可用目录</p><h2>当前可用于自动剪辑</h2></div><span id="catalog-count"></span></section>
+      <section id="material-grid" class="material-grid" aria-live="polite"></section>
+
+      <section class="rights-note">
+        <strong>版权边界</strong>
+        <p>Pexels/Pixabay 素材保留作者、原页和许可链接；本地素材必须附带授权依据。平台不会抓取或搬运抖音、小红书视频本体。</p>
+        <a href="https://www.pexels.com/license/" target="_blank" rel="noreferrer">查看 Pexels License ↗</a>
+      </section>
+    </main>
+    <template id="material-card-template">
+      <article class="material-card">
+        <video muted loop playsinline preload="metadata"></video>
+        <div class="material-card-body">
+          <div class="material-card-top"><span class="provider"></span><span class="usage"></span></div>
+          <h3></h3><p class="rights"></p><p class="attribution"></p>
+          <div class="material-links"><a class="source-link" target="_blank" rel="noreferrer">来源 ↗</a><a class="license-link" target="_blank" rel="noreferrer">许可 ↗</a></div>
+        </div>
+      </article>
+    </template>
+    <script src="/static/materials.js?v=20260820-3" defer></script>
+  </body>
+</html>

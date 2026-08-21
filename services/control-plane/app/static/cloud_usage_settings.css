@@ -1,0 +1,101 @@
+.usage-center {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.evidence-layer-grid,
+.usage-detail-grid,
+.local-usage-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.evidence-layer-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.usage-detail-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.local-usage-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.evidence-layer {
+  min-width: 0;
+  border-top: 2px solid var(--color-border-strong);
+  background: var(--color-surface);
+  padding: 0.75rem 0;
+}
+
+.evidence-layer.available,
+.evidence-layer.configured { border-top-color: var(--color-success); }
+.evidence-layer.unavailable,
+.evidence-layer.not_configured { border-top-color: var(--color-warning); }
+.evidence-layer strong { display: block; margin-bottom: 0.2rem; font-size: var(--step--1); }
+.evidence-layer span { color: var(--color-ink-muted); font-size: 0.72rem; }
+
+.usage-detail-card,
+.local-usage-card {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  padding: 1rem;
+}
+
+.usage-detail-card header,
+.local-usage-card header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.usage-detail-card h3,
+.local-usage-card h3 { color: var(--color-ink-muted); font-size: var(--step--1); }
+.usage-detail-card > strong,
+.local-usage-card > strong { display: block; margin: 0.8rem 0 0.35rem; font-size: var(--step-3); line-height: 1; letter-spacing: -0.04em; }
+.usage-detail-card p,
+.local-usage-card p { margin: 0; color: var(--color-ink-muted); font-size: 0.75rem; }
+.usage-detail-card .unknown-value { color: var(--color-warning); }
+
+.usage-ledger-section { margin-bottom: 1rem; }
+.usage-ledger-section tbody td:first-child { min-width: 14rem; }
+.ledger-title { display: grid; gap: 0.1rem; }
+.ledger-title small { color: var(--color-ink-muted); }
+.ledger-zero { color: var(--color-ink-soft); }
+
+.credential-settings {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.credential-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.credential-settings > summary::-webkit-details-marker { display: none; }
+.credential-settings > summary > span:first-child { display: grid; }
+.credential-settings > summary small { color: var(--color-ink-muted); font-weight: 500; }
+.credential-settings > summary > span:last-child { color: var(--color-accent-strong); font-size: var(--step--1); font-weight: 750; }
+.credential-settings[open] > summary { border-bottom: 1px solid var(--color-border); }
+.credential-settings-body { display: grid; grid-template-columns: minmax(18rem, 0.75fr) minmax(0, 1.25fr); gap: 1rem; padding: 1.25rem; }
+
+.credential-guide { border-radius: var(--radius-md); background: var(--color-surface-subtle); padding: 1rem; }
+.credential-guide h2 { margin: 0.6rem 0; font-size: var(--step-1); }
+.credential-guide ol { margin: 0; padding-left: 1.2rem; }
+.credential-guide li { margin: 0.45rem 0; color: var(--color-ink-muted); font-size: var(--step--1); }
+.credential-guide code { color: var(--color-accent-strong); }
+#cloud-usage-form { display: grid; gap: 0.85rem; }
+.settings-note { margin: 0; color: var(--color-ink-muted); font-size: 0.75rem; }
+.settings-actions { display: flex; align-items: center; gap: 0.75rem; }
+#settings-result { color: var(--color-ink-muted); font-size: var(--step--1); }
+
+@media (max-width: 1100px) {
+  .evidence-layer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-detail-grid, .local-usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .usage-page-head .page-head-actions { align-items: flex-start; flex-direction: column; }
+  .evidence-layer-grid, .usage-detail-grid, .local-usage-grid, .credential-settings-body { grid-template-columns: 1fr; }
+  .credential-settings > summary { align-items: flex-start; }
+  .secret-row { grid-template-columns: 1fr; }
+  .settings-actions { align-items: stretch; flex-direction: column; }
+}

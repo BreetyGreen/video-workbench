@@ -1,0 +1,1 @@
+"""DingTalk material intake connector."""

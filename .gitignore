@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.superpowers/
+data/
+docs/verification/
+services/control-plane/.venv/
+services/control-plane/data/
+connectors/dingtalk/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.db
+fixtures/media/*.mp4
+outputs/
+work/
