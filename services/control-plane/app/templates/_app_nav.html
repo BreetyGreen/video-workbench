@@ -1,0 +1,38 @@
+<aside class="app-sidebar">
+  <a class="app-brand" href="/" aria-label="视频生产控制台首页">
+    <span class="app-brand-mark" aria-hidden="true">V</span>
+    <span class="app-brand-copy"><strong>VIDEOPILOT</strong><small>自动视频工作台</small></span>
+  </a>
+  <nav class="app-nav" aria-label="主导航">
+    <div class="app-nav-group">
+      <span class="app-nav-label">创作</span>
+      <a href="/"{% if nav_active == 'workbench' %} aria-current="page"{% endif %}><span aria-hidden="true">＋</span><span>开始创作</span></a>
+      {% if nav_active == 'review' %}<span class="app-nav-current" aria-current="page"><span aria-hidden="true">◉</span><span>任务审核</span></span>{% endif %}
+      <a href="/trends"{% if nav_active == 'trends' %} aria-current="page"{% endif %}><span aria-hidden="true">↗</span><span>热点雷达</span></a>
+      <a href="/materials"{% if nav_active == 'materials' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span><span>授权素材</span></a>
+      <a href="/voices"{% if nav_active == 'voices' %} aria-current="page"{% endif %}><span aria-hidden="true">♫</span><span>音色中心</span></a>
+    </div>
+    <div class="app-nav-group">
+      <span class="app-nav-label">管理</span>
+      <a href="/setup"{% if nav_active == 'setup' %} aria-current="page"{% endif %}><span aria-hidden="true">✓</span><span>配置助手</span></a>
+      <a href="/settings/cloud-usage"{% if nav_active == 'cloud_usage' %} aria-current="page"{% endif %}><span aria-hidden="true">◎</span><span>用量与成本</span></a>
+      <a href="/docs"><span aria-hidden="true">⌘</span><span>API 文档</span></a>
+    </div>
+  </nav>
+  <div class="app-sidebar-foot">
+    <span class="app-status-dot" aria-hidden="true"></span><span>本地服务运行中</span>
+    <a href="http://127.0.0.1:1241" target="_blank" rel="noreferrer">ArcReel ↗</a>
+  </div>
+</aside>
+
+<header class="app-mobilebar">
+  <a class="app-mobile-brand" href="/" aria-label="视频生产控制台首页"><span class="app-brand-mark" aria-hidden="true">V</span><strong>VIDEOPILOT</strong></a>
+  <nav aria-label="移动端主导航">
+    <a href="/"{% if nav_active == 'workbench' %} aria-current="page"{% endif %}>创作</a>
+    <a href="/trends"{% if nav_active == 'trends' %} aria-current="page"{% endif %}>热点</a>
+    <a href="/materials"{% if nav_active == 'materials' %} aria-current="page"{% endif %}>素材</a>
+    <a href="/voices"{% if nav_active == 'voices' %} aria-current="page"{% endif %}>音色</a>
+    <a href="/setup"{% if nav_active == 'setup' %} aria-current="page"{% endif %}>配置</a>
+    <a href="/settings/cloud-usage"{% if nav_active == 'cloud_usage' %} aria-current="page"{% endif %}>用量</a>
+  </nav>
+</header>

@@ -1,0 +1,52 @@
+services:
+  control-plane:
+    env_file:
+      - ${VIDEO_WORKBENCH_PRODUCTION_ENV_FILE:-../.env.production}
+    restart: unless-stopped
+    volumes:
+      - control-plane-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8130/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2.10-alpine
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      VIDEO_WORKBENCH_DOMAIN: ${VIDEO_WORKBENCH_DOMAIN:-localhost}
+      AUTH_USERNAME: ${AUTH_USERNAME:?AUTH_USERNAME is required}
+      VIDEO_WORKBENCH_BASIC_AUTH_HASH: ${VIDEO_WORKBENCH_BASIC_AUTH_HASH:?VIDEO_WORKBENCH_BASIC_AUTH_HASH is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/config/"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  control-plane-data:
+  caddy-data:
+  caddy-config:

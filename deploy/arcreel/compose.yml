@@ -1,0 +1,27 @@
+services:
+  arcreel:
+    image: ghcr.io/arcreel/arcreel:0.26.0
+    ports:
+      - "127.0.0.1:1241:1241"
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./.env:/app/.env
+      - ../../data/arcreel/projects:/app/projects
+      - ../../data/arcreel/logs:/app/logs
+      - ../../data/arcreel/vertex_keys:/app/vertex_keys
+      - ../../data/arcreel/claude_data:/root/.claude
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1241/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

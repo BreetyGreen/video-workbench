@@ -1,0 +1,120 @@
+app:
+  description: 基于有来源的趋势记录生成爆款模式分析和三套发布文案
+  icon: "📈"
+  icon_background: "#D1E9FF"
+  mode: workflow
+  name: 抖音趋势与文案分析
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+  graph:
+    edges:
+      - id: start-source-llm-target
+        source: start
+        sourceHandle: source
+        target: llm
+        targetHandle: target
+        type: custom
+        data: {isInIteration: false, isInLoop: false, sourceType: start, targetType: llm}
+      - id: llm-source-end-target
+        source: llm
+        sourceHandle: source
+        target: end
+        targetHandle: target
+        type: custom
+        data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: end}
+    nodes:
+      - id: start
+        type: custom
+        position: {x: 80, y: 260}
+        positionAbsolute: {x: 80, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 210
+        data:
+          title: 开始
+          desc: 输入带来源的趋势记录
+          type: start
+          selected: false
+          variables:
+            - {label: 内容类目, variable: content_category, type: text-input, required: true, max_length: 100, options: []}
+            - {label: 公开趋势记录 JSON, variable: trend_records, type: paragraph, required: true, max_length: 50000, options: []}
+            - {label: 账号授权指标 JSON, variable: owner_metrics, type: paragraph, required: false, max_length: 50000, options: []}
+      - id: llm
+        type: custom
+        position: {x: 390, y: 260}
+        positionAbsolute: {x: 390, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 250
+        data:
+          title: 分析趋势并生成文案
+          desc: 所有结论必须关联输入证据
+          type: llm
+          selected: false
+          context: {enabled: false, variable_selector: []}
+          memory: null
+          model:
+            provider: langgenius/volcengine/volcengine
+            name: doubao-seed-2-0-pro-260215
+            mode: chat
+            completion_params: {temperature: 0.3, thinking: disabled}
+          prompt_template:
+            - id: viral-system
+              role: system
+              text: |-
+                你是短视频趋势分析师。公开页面指标标记为 public，只有账号所有者授权提供的后台指标才能标记为 owner_authorized。
+                不得臆测完播率、成交或受众画像。建议必须能追溯到输入记录。
+                只输出 JSON，不要 Markdown。字段：summary(string)、patterns(string[])、
+                evidence({metric,value,source_type,source,explanation}[])、recommendations(string[])、
+                publish_copy({title,body,topics(string[]),rationale}[])。publish_copy 必须恰好三套。
+            - id: viral-user
+              role: user
+              text: |-
+                类目：{{#start.content_category#}}
+                公开趋势记录：{{#start.trend_records#}}
+                账号授权指标：{{#start.owner_metrics#}}
+          structured_output_enabled: false
+          variables: []
+          vision: {enabled: false}
+      - id: end
+        type: custom
+        position: {x: 700, y: 260}
+        positionAbsolute: {x: 700, y: 260}
+        sourcePosition: right
+        targetPosition: left
+        width: 244
+        height: 90
+        data:
+          title: 结束
+          desc: 返回分析 JSON
+          type: end
+          selected: false
+          outputs:
+            - variable: text
+              value_selector: [llm, text]
+    viewport: {x: 0, y: 0, zoom: 1}

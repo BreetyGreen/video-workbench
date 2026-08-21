@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>视频生产控制台</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/workbench.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'workbench' %}
+    {% include '_app_nav.html' %}
+
+    <main class="app-main workspace">
+      <section class="page-head">
+        <div>
+          <p class="eyebrow">工作台 / 新建视频</p>
+          <h1>今天想让观众记住什么？</h1>
+          <p>说清主题、放入素材，其余剪辑决策由系统先生成一版可审查方案。</p>
+        </div>
+        <div class="page-head-actions"><span>人工审核后才会交付</span><button class="button quiet" id="run-daily" type="button">运行每日流程</button></div>
+      </section>
+
+      <section class="integration-strip" aria-labelledby="integration-title">
+        <div class="strip-heading">
+          <h2 id="integration-title">连接状态</h2>
+          <div class="integration-heading-actions">
+            <a class="setup-progress-link" id="setup-progress" href="/setup"><strong>配置助手</strong><span>正在读取…</span></a>
+            <span id="last-refresh">正在读取…</span>
+          </div>
+        </div>
+        <div id="integration-list" class="integration-list" aria-live="polite">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+      </section>
+
+      <section class="integration-strip" aria-labelledby="local-runtime-title">
+        <div class="strip-heading">
+          <div>
+            <h2 id="local-runtime-title">本机运行环境</h2>
+            <span>数据目录、素材收件箱和剪映路径会自动发现，不需要填写配置。</span>
+          </div>
+        </div>
+        <div id="local-runtime-status" class="integration-list" aria-live="polite">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+      </section>
+
+      <section class="section usage-section" aria-labelledby="usage-title">
+        <div class="section-heading">
+          <div><h2 id="usage-title">云端余量</h2><p>官方读取余额、信控、代金券、资源包和方舟免费额度；未返回的数据明确显示为未知。</p></div>
+          <div class="usage-actions"><a href="/settings/cloud-usage">配置只读凭证</a><button class="button quiet" id="refresh-cloud-usage" type="button">刷新余量</button></div>
+        </div>
+        <div id="cloud-usage-cards" class="usage-grid" aria-live="polite">
+          <div class="skeleton wide"></div><div class="skeleton wide"></div><div class="skeleton wide"></div><div class="skeleton wide"></div>
+        </div>
+      </section>
+
+      <div class="primary-layout">
+        <section class="section create-section" aria-labelledby="create-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">NEW PROJECT</p>
+              <h2 id="create-title">一句话开始创作</h2>
+              <p>默认只需要主题与素材；教程、参考片和质量档位放在高级设置里。</p>
+            </div>
+            <span class="step-label">约 2 分钟建稿</span>
+          </div>
+          <form id="task-form" enctype="multipart/form-data">
+            <input type="hidden" name="content_type" value="通用短视频">
+            <label class="creation-prompt">
+              <span>主题与目标</span>
+              <textarea name="title" required maxlength="200" rows="3" placeholder="例如：做一个 25 秒的宠物除毛梳商品介绍，前三秒突出‘沙发不再粘毛’，语气自然、有教程感。"></textarea>
+              <small>可以直接描述时长、商品、开场钩子和语气，不需要拆成多项填写。</small>
+            </label>
+            <div class="preset-row" aria-label="快速创作类型">
+              <button class="preset-chip active" type="button" data-content-type="通用短视频" aria-pressed="true">通用短视频</button>
+              <button class="preset-chip" type="button" data-content-type="商品介绍" aria-pressed="false">商品介绍</button>
+              <button class="preset-chip" type="button" data-content-type="教程讲解" aria-pressed="false">教程讲解</button>
+              <button class="preset-chip" type="button" data-content-type="热点改编" aria-pressed="false">热点改编</button>
+            </div>
+            <label class="file-field primary-upload">
+              <span>添加素材</span>
+              <input name="files" type="file" accept="video/*,audio/*,image/*,.txt,.pdf,.docx,.pptx" multiple required>
+              <strong>拖入视频、图片或点击选择</strong>
+              <small id="asset-summary">至少选择一个视频；素材只复制到本地任务目录。</small>
+            </label>
+
+            <details class="advanced-settings">
+              <summary><span>高级设置</span><small>教程、参考片、质量与云端处理</small></summary>
+              <div class="advanced-settings-body">
+                <label>补充制作要求<textarea name="requirements_text" maxlength="50000" placeholder="例如：保留真实环境声、不要夸大功效"></textarea></label>
+                <label>剪辑教程<textarea name="tutorial_text" maxlength="50000" placeholder="粘贴教程，或把 UTF-8 文本教程和素材一起上传"></textarea></label>
+                <div class="field-row">
+                  <label>旁白音色
+                    <select name="voice_preset">
+                      <option value="vivi-2">Vivi 2.0 · 教程推荐</option>
+                      <option value="sweet-peach">甜美桃子 · 宠物/种草</option>
+                      <option value="smooth-female">流畅女声 · 步骤讲解</option>
+                      <option value="dayi">大壹 · 男声测评</option>
+                      <option value="yunzhou">云舟 · 沉稳科普</option>
+                    </select>
+                    <small><a href="/voices">官方音色中心</a>可先试听；未经授权的真人克隆不在此列。</small>
+                  </label>
+                  <label>制作质量
+                    <select name="quality_profile">
+                      <option value="production">生产高质量 · 豆包 ASR / large-v3</option>
+                      <option value="local_privacy">本地隐私 · large-v3</option>
+                      <option value="fast_preview">快速预览 · small</option>
+                    </select>
+                  </label>
+                  <label class="check-field cloud-consent"><input name="cloud_processing_allowed" type="checkbox" value="true"><span>允许该任务把音频发送到已配置的云端模型</span></label>
+                </div>
+                <label class="file-field reference-field">
+                  <span>参考爆款视频（可选）</span>
+                  <input name="reference_file" type="file" accept="video/*">
+                  <small>只分析结构、钩子与节奏，不会把参考片放进成片。</small>
+                </label>
+              </div>
+            </details>
+
+            <div class="creation-footer">
+              <label class="check-field rights-check"><input name="rights_confirmed" type="checkbox" value="true"><span>我已确认拥有素材使用权</span></label>
+              <div id="creation-preflight" class="creation-preflight"><span>通用短视频</span><span>等待素材</span><span>Vivi 2.0</span><span>生产高质量</span></div>
+            </div>
+            <div class="form-actions">
+              <button class="button primary" type="submit">生成视频方案</button>
+              <span id="task-form-status" role="status"></span>
+            </div>
+          </form>
+        </section>
+
+        <aside class="section schedule-section" aria-labelledby="schedule-title">
+          <div class="section-heading">
+            <div><h2 id="schedule-title">每日自动化</h2><p>到点读取热点、匹配授权素材、自动建任务并生成成片。</p></div>
+            <span class="step-label">定时</span>
+          </div>
+          <form id="schedule-form">
+            <label class="switch-row"><span>启用每日流程</span><input name="enabled" type="checkbox" role="switch"></label>
+            <div class="field-row compact">
+              <label>小时<input name="hour" type="number" min="0" max="23" required></label>
+              <label>分钟<input name="minute" type="number" min="0" max="59" required></label>
+            </div>
+            <label>时区<input name="timezone" required value="Asia/Shanghai"></label>
+            <label>热点关键词<textarea name="keywords" required placeholder="每行一个关键词"></textarea></label>
+            <button class="button secondary" type="submit">保存定时设置</button>
+            <p class="inline-status" id="schedule-status" role="status"></p>
+          </form>
+          <div class="run-summary">
+            <h3>最近运行</h3>
+            <div id="latest-run" class="empty-line">尚无运行记录</div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="section task-section" aria-labelledby="task-title">
+        <div class="section-heading">
+          <div><h2 id="task-title">任务队列</h2><p>自动流程只处理“已接收”且包含视频的任务。</p></div>
+          <div class="row-actions">
+            <button class="button quiet" id="show-archived" type="button" aria-pressed="false">查看归档</button>
+            <button class="button quiet" id="refresh" type="button">刷新</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>任务</th><th>来源</th><th>授权</th><th>状态</th><th>更新时间</th><th><span class="sr-only">操作</span></th></tr></thead>
+            <tbody id="task-list"><tr><td colspan="6"><div class="skeleton wide"></div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="secondary-layout">
+        <section class="section" aria-labelledby="trend-title">
+          <div class="section-heading"><div><h2 id="trend-title">热点证据</h2><p>只展示有来源和抓取时间的公开记录。</p></div><span class="step-label">趋势库</span></div>
+          <div id="trend-list" class="evidence-list"><div class="skeleton wide"></div></div>
+        </section>
+        <section class="boundary" aria-labelledby="boundary-title">
+          <h2 id="boundary-title">发布边界</h2>
+          <p>系统生成的是待审核发布包。未确认版权、缺少交付物或审核未通过时，不能进入发布阶段。</p>
+          <p>不使用抖音浏览器 Cookie 做无人值守发布；剪映草稿首次打开仍需人工验证兼容性。</p>
+        </section>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/workbench.js?v={{ workbench_asset_version }}" defer></script>
+  </body>
+</html>

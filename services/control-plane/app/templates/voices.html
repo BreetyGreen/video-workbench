@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>官方音色中心</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/voices.css?v=20260820-2">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'voices' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main voice-page">
+      <header class="voice-hero">
+        <div>
+          <p class="eyebrow">创作 / 音色中心</p>
+          <h1>官方授权音色</h1>
+          <p>从火山引擎官方音色中筛选适合商品讲解、教程和宠物内容的预设。试听成功后，才标记为当前账号已验证。</p>
+        </div>
+        <a class="hero-action" href="/">返回创作</a>
+      </header>
+
+      <section class="voice-boundary" aria-label="音色合规边界">
+        <span>官方音色</span>
+        <p>这里提供的是平台官方 Speaker ID，不是对某个真人博主的未授权声音克隆。</p>
+      </section>
+
+      <section class="voice-toolbar">
+        <div class="filter-chips" role="group" aria-label="按场景筛选">
+          <button type="button" class="filter-chip active" data-filter="all">全部</button>
+          <button type="button" class="filter-chip" data-filter="商品介绍">商品介绍</button>
+          <button type="button" class="filter-chip" data-filter="教程讲解">教程讲解</button>
+          <button type="button" class="filter-chip" data-filter="宠物种草">宠物种草</button>
+        </div>
+        <span id="voice-status" role="status">正在读取官方音色…</span>
+      </section>
+
+      <section id="voice-grid" class="voice-grid" aria-live="polite">
+        <div class="voice-skeleton"></div><div class="voice-skeleton"></div><div class="voice-skeleton"></div>
+      </section>
+
+      <section class="voice-notes">
+        <div><strong>试听也会产生用量</strong><p>首次试听按字符记录；相同音色+文本命中本地缓存后不重复调用。</p></div>
+        <div><strong>热门不等于必然可用</strong><p>“抖音同款”来自官方标签；当前账号的资源授权以实际试听结果为准。</p></div>
+      </section>
+    </main>
+    <template id="voice-card-template">
+      <article class="voice-card">
+        <div class="voice-card-top"><div class="voice-avatar" aria-hidden="true"></div><span class="availability"></span></div>
+        <div><p class="voice-kicker"></p><h2></h2><p class="voice-description"></p></div>
+        <div class="voice-tags"></div>
+        <label class="preview-copy"><span>试听文案</span><textarea maxlength="200" rows="3"></textarea></label>
+        <audio controls preload="none" hidden></audio>
+        <div class="voice-card-actions"><button class="preview-button" type="button">生成试听</button><a class="source-link" target="_blank" rel="noreferrer">官方来源 ↗</a></div>
+        <p class="card-status" role="status"></p>
+      </article>
+    </template>
+    <script src="/static/voices.js" defer></script>
+  </body>
+</html>

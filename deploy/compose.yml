@@ -1,0 +1,77 @@
+services:
+  arcreel:
+    image: ghcr.io/arcreel/arcreel:0.26.0
+    ports:
+      - "127.0.0.1:1241:1241"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      UV_NO_DEV: "1"
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ../.env:/app/.env
+      - ../data/arcreel/projects:/app/projects
+      - ../data/arcreel/logs:/app/logs
+      - ../data/arcreel/vertex_keys:/app/vertex_keys
+      - ../data/arcreel/claude_data:/root/.claude
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1241/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  control-plane:
+    image: automated-video-workbench/control-plane:0.1.0
+    build:
+      context: ../services/control-plane
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8130:8130"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      VIDEO_WORKBENCH_DATA_DIR: /data
+      VIDEO_WORKBENCH_DATABASE_URL: sqlite:////data/control-plane.db
+      VIDEO_WORKBENCH_FFMPEG_BIN: ffmpeg
+      VIDEO_WORKBENCH_FFPROBE_BIN: ffprobe
+      VIDEO_WORKBENCH_WHISPER_MODEL: ${VIDEO_WORKBENCH_WHISPER_MODEL:-small}
+      HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET:-1}
+      VIDEO_WORKBENCH_DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-}
+      VIDEO_WORKBENCH_DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-}
+    volumes:
+      - ../data/control-plane:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8130/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  dingtalk:
+    image: automated-video-workbench/dingtalk-connector:0.1.0
+    profiles: ["dingtalk"]
+    build:
+      context: ../connectors/dingtalk
+      dockerfile: Dockerfile
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      CONTROL_PLANE_URL: http://control-plane:8130
+      DINGTALK_DEDUP_DATABASE: /data/dedup.db
+    volumes:
+      - ../data/dingtalk:/data
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+{
+  admin 0.0.0.0:2019
+}
+
+{$VIDEO_WORKBENCH_DOMAIN:localhost} {
+  encode zstd gzip
+  basic_auth {
+    {$AUTH_USERNAME} {$VIDEO_WORKBENCH_BASIC_AUTH_HASH}
+  }
+  reverse_proxy control-plane:8130
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+    X-Frame-Options SAMEORIGIN
+  }
+}

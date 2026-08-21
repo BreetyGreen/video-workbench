@@ -1,0 +1,38 @@
+.material-page { width: auto; max-width: 92rem; min-width: 0; padding: clamp(1.25rem, 3vw, 3rem) var(--page-gutter) 4rem; }
+.material-hero { display: flex; align-items: end; justify-content: space-between; gap: 2rem; padding: .75rem 0 2rem; border-bottom: 1px solid var(--color-border); }
+.eyebrow { margin: 0 0 .65rem; color: var(--color-accent); font-size: .75rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.material-hero h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 4.6rem); line-height: .98; letter-spacing: -.055em; }
+.material-hero p:not(.eyebrow) { max-width: 48rem; margin: 1rem 0 0; color: var(--color-ink-muted); }
+.hero-action { flex: none; padding: .8rem 1rem; border: 1px solid var(--color-border-strong); border-radius: 999px; text-decoration: none; font-weight: 700; }
+.source-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: center; gap: 1px; margin: 1.3rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; background: var(--color-border); }
+.source-strip > * { min-width: 0; height: 100%; padding: 1rem; background: var(--color-surface); }
+.source-strip div { display: grid; gap: .2rem; }
+.source-strip strong { font-size: 1.2rem; }
+.source-strip span { color: var(--color-ink-muted); font-size: .78rem; }
+.source-strip button, .acquire-panel button { border: 0; background: var(--color-accent); color: white; font-weight: 800; cursor: pointer; }
+.acquire-panel { display: grid; grid-template-columns: 1fr minmax(22rem, 1.25fr); gap: 2rem; align-items: end; padding: clamp(1.3rem, 3vw, 2.3rem); border-radius: var(--radius-lg); background: var(--color-stage); color: white; }
+.acquire-panel h2 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.8rem); letter-spacing: -.045em; }
+.acquire-panel form { display: grid; grid-template-columns: 1fr auto; gap: .65rem; }
+.acquire-panel label { display: grid; gap: .35rem; }
+.acquire-panel label span { color: oklch(.82 .02 285); font-size: .75rem; }
+.acquire-panel input { min-width: 0; border: 1px solid oklch(.5 .03 285); border-radius: .65rem; background: oklch(.2 .025 285); color: white; padding: .8rem .9rem; }
+.acquire-panel button { border-radius: .65rem; padding: .8rem 1rem; }
+#material-status { grid-column: 1 / -1; margin: 0; color: oklch(.82 .02 285); font-size: .8rem; overflow-wrap: anywhere; }
+.catalog-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin: 2.5rem 0 1rem; }
+.catalog-heading h2 { margin: 0; font-size: 1.75rem; letter-spacing: -.035em; }
+#catalog-count { color: var(--color-ink-muted); font-size: .85rem; }
+.material-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.material-card { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-raised); }
+.material-card video { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--color-stage); }
+.material-card-body { display: grid; gap: .65rem; padding: 1rem; }
+.material-card-top, .material-links { display: flex; justify-content: space-between; gap: .75rem; }
+.provider, .usage { color: var(--color-accent-strong); font-size: .72rem; font-weight: 800; }
+.material-card h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.material-card p { margin: 0; color: var(--color-ink-muted); font-size: .8rem; overflow-wrap: anywhere; }
+.material-links a { color: var(--color-accent-strong); font-size: .76rem; font-weight: 700; text-decoration: none; }
+.material-links a[hidden] { display: none; }
+.rights-note { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; margin-top: 2rem; padding: 1.15rem; border-top: 3px solid var(--color-ink); background: var(--color-surface-subtle); }
+.rights-note p { margin: 0; color: var(--color-ink-muted); }
+.rights-note a { color: var(--color-accent-strong); font-weight: 700; text-decoration: none; }
+@media (max-width: 960px) { .material-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .acquire-panel { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .material-hero { align-items: start; flex-direction: column; } .source-strip, .material-grid, .rights-note { grid-template-columns: 1fr; } .acquire-panel form { grid-template-columns: 1fr; } }

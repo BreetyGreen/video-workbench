@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>用量与成本 · 视频生产控制台</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/workbench.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/cloud_usage_settings.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'cloud_usage' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main workspace settings-shell">
+      <header class="page-head usage-page-head">
+        <div><p class="eyebrow">USAGE & COST</p><h1>用量与成本</h1><p>官方余额、赠送资源、本地计量和单条视频消耗分开显示；读不到的值不会伪装成 0。</p></div>
+        <div class="page-head-actions"><span id="usage-updated-at">正在读取…</span><button class="button quiet" id="refresh-usage" type="button">刷新官方数据</button></div>
+      </header>
+
+      <section id="usage-overview" class="usage-center" aria-labelledby="usage-overview-title">
+        <div class="section-heading"><div><h2 id="usage-overview-title">余量证据层</h2><p>先看数据来自哪里，再看数值本身。</p></div><span id="credential-state" class="step-label">读取中</span></div>
+        <div id="evidence-layers" class="evidence-layer-grid" aria-live="polite"><div class="skeleton wide"></div><div class="skeleton wide"></div><div class="skeleton wide"></div><div class="skeleton wide"></div></div>
+        <div id="official-usage-cards" class="usage-detail-grid" aria-live="polite"><div class="skeleton wide"></div><div class="skeleton wide"></div><div class="skeleton wide"></div></div>
+        <div id="local-usage-cards" class="local-usage-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="section usage-ledger-section" aria-labelledby="task-usage-title">
+        <div class="section-heading"><div><p class="eyebrow">PER VIDEO LEDGER</p><h2 id="task-usage-title">每条视频实际调用</h2><p>这里只统计本机确实发出的 ASR、TTS 和 Dify 调用，不等同于官方账单。</p></div><a class="page-return" href="/">← 返回工作台</a></div>
+        <div class="table-scroll">
+          <table id="task-usage-ledger">
+            <thead><tr><th>视频</th><th>ASR</th><th>TTS</th><th>Dify</th><th>调用事件</th><th>最后调用</th></tr></thead>
+            <tbody><tr><td colspan="6"><div class="skeleton wide"></div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <details class="credential-settings">
+        <summary><span><strong>云端余量设置</strong><small>火山引擎只读凭证与本地预算</small></span><span>展开配置</span></summary>
+        <div class="credential-settings-body">
+          <aside class="credential-guide" aria-labelledby="credential-guide-title">
+            <div><span class="step-label">只读子用户</span><h2 id="credential-guide-title">这里填写哪一组密钥？</h2></div>
+            <ol>
+              <li>进入火山引擎“用户管理 → 用户”，点击 <code>video-usage-monitor</code> 用户名。</li>
+              <li>进入“密钥”页签，使用这个子用户已有的 <strong>Access Key</strong>。</li>
+              <li>分别复制 Access Key ID 与 Secret Access Key；<strong>不要创建 API Key</strong>。</li>
+              <li>Secret Access Key 无法再次查看时，请轮换该子用户的 Access Key，不要改用主账号密钥。</li>
+            </ol>
+          </aside>
+          <form id="cloud-usage-form">
+            <label>Access Key ID<div class="secret-row"><input name="access_key_id" autocomplete="off" required><button type="button" class="button quiet clipboard" data-target="access_key_id">从剪贴板读取</button></div></label>
+            <label>Secret Access Key<div class="secret-row"><input name="secret_access_key" type="password" autocomplete="new-password" required><button type="button" class="button quiet clipboard" data-target="secret_access_key">从剪贴板读取</button></div></label>
+            <div class="field-row"><label>ASR 总额度（秒）<input name="asr_total_seconds" type="number" min="0"></label><label>TTS 总额度（字符）<input name="tts_total_characters" type="number" min="0"></label></div>
+            <div class="field-row"><label>方舟月度 Token 预算<input name="ark_monthly_tokens" type="number" min="0"></label><label>余量预警线（%）<input name="warning_threshold_percent" type="number" min="0" max="100"></label></div>
+            <label>余量严重告警线（%）<input name="critical_threshold_percent" type="number" min="0" max="100"></label>
+            <p class="settings-note">额度为 0 时只展示已用量，不计算剩余百分比；本地预算不会改变云端真实额度。</p>
+            <div class="settings-actions"><button class="button primary" type="submit">验证并保存</button><span id="settings-result" role="status"></span></div>
+          </form>
+        </div>
+      </details>
+    </main>
+    <script src="/static/cloud_usage_settings.js" defer></script>
+  </body>
+</html>

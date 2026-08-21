@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>热点雷达</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/trends.css?v=20260820-2">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'trends' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main trend-page">
+      <header class="trend-hero">
+        <div><p class="eyebrow">创作 / 热点雷达</p><h1>先找结构，再做内容。</h1><p>抖音使用开放平台官方搜索；小红书仅导入你已人工核对的公开页面证据。</p></div>
+        <a href="/">返回创作</a>
+      </header>
+
+      <section class="source-grid">
+        <article class="source-panel primary-source">
+          <div class="source-heading"><span class="source-mark douyin">D</span><div><p>抖音官方搜索</p><small>需要 Client Key、Client Secret 和 Device ID</small></div></div>
+          <form id="douyin-discovery-form">
+            <label><span>输入主题或关键词</span><input name="keyword" required maxlength="80" placeholder="例如：宠物梳毛"></label>
+            <div class="compact-fields"><label><span>结果数</span><input name="count" type="number" min="1" max="20" value="10"></label><label><span>时间范围</span><select name="publish_days"><option value="7">近 7 天</option><option value="30">近 30 天</option></select></label></div>
+            <button type="submit">官方检索并入库</button><p id="douyin-status" role="status"></p>
+          </form>
+        </article>
+        <article class="source-panel">
+          <div class="source-heading"><span class="source-mark xhs">R</span><div><p>小红书证据导入</p><small>不绕过登录、不批量爬取，仅保存公开链接与人工证据</small></div></div>
+          <form id="xhs-import-form">
+            <div class="compact-fields"><label><span>关键词</span><input name="keyword" required maxlength="80" placeholder="宠物梳毛"></label><label><span>公开热度</span><input name="engagement_count" type="number" min="0" value="0"></label></div>
+            <label><span>标题</span><input name="title" required maxlength="300"></label>
+            <label><span>小红书公开链接</span><input name="url" type="url" required placeholder="https://www.xiaohongshu.com/explore/..."></label>
+            <label><span>证据备注</span><textarea name="evidence_note" required rows="2" placeholder="例如：人工核对的点赞数和页面日期"></textarea></label>
+            <button type="submit">导入证据</button><p id="xhs-status" role="status"></p>
+          </form>
+        </article>
+      </section>
+
+      <section class="trend-library">
+        <div class="library-head"><div><p class="eyebrow">证据库</p><h2>已收录的热点样本</h2></div><button id="refresh-trends" type="button">刷新</button></div>
+        <div id="trend-results" class="trend-results" aria-live="polite"><div class="trend-skeleton"></div><div class="trend-skeleton"></div></div>
+      </section>
+      <aside class="trend-boundary"><strong>使用边界</strong><p>系统只学习钩子、节奏、画面结构和公开数据；不下载他人原片、不复制文案，也不代表可直接发布。</p></aside>
+    </main>
+    <script src="/static/trends.js" defer></script>
+  </body>
+</html>

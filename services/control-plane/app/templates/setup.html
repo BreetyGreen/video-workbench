@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>配置助手 · VideoPilot</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/setup.css?v=20260821-2">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'setup' %}
+    {% include '_app_nav.html' %}
+
+    <main class="app-main setup-shell">
+      <header class="setup-head">
+        <div>
+          <span class="setup-kicker">首次启动</span>
+          <h1>3 分钟完成本机检查</h1>
+          <p>先确认本地剪辑可以运行。火山引擎、素材库、抖音和钉钉都是可选增强，不会挡住你开始创作。</p>
+        </div>
+        <a class="setup-link" href="/">返回工作台</a>
+      </header>
+
+      <ol class="setup-progress" aria-label="首次启动进度">
+        <li class="active"><span>1</span><strong>检查本机</strong></li>
+        <li><span>2</span><strong>启用本地模式</strong></li>
+        <li><span>3</span><strong>按需连接服务</strong></li>
+        <li><span>4</span><strong>开始创作</strong></li>
+      </ol>
+
+      <section class="local-ready" aria-labelledby="local-ready-title">
+        <div class="local-ready-copy">
+          <span class="status-label" id="local-ready-label">正在检查</span>
+          <h2 id="local-ready-title">本地模式现在就能用</h2>
+          <p>上传自己的视频后，可直接完成分析、自动剪辑、字幕、预览和剪映草稿。云服务均为可选增强。</p>
+          <div class="feature-row" id="local-feature-list" aria-label="本地可用功能"></div>
+        </div>
+        <button class="setup-button primary" id="confirm-local-mode" type="button" disabled>使用本地模式进入工作台</button>
+      </section>
+
+      <section class="setup-section" aria-labelledby="runtime-title">
+        <div class="section-copy">
+          <h2 id="runtime-title">本机检查</h2>
+          <p>路径由程序自动发现。只有检测失败的项目才需要处理。</p>
+        </div>
+        <div class="runtime-list" id="setup-runtime-list" aria-live="polite">
+          <div class="setup-skeleton"></div><div class="setup-skeleton"></div><div class="setup-skeleton"></div>
+        </div>
+      </section>
+
+      <section class="setup-section" aria-labelledby="providers-title">
+        <div class="section-copy provider-heading">
+          <div>
+            <h2 id="providers-title">按需要连接增强能力</h2>
+            <p>不用一次配完。每项都给出官方入口、所需内容和本地替代方案。</p>
+          </div>
+          <span id="setup-completion">0 / 4 已连接</span>
+        </div>
+        <div class="setup-provider-list" id="setup-provider-list" aria-live="polite">
+          <div class="setup-skeleton provider"></div><div class="setup-skeleton provider"></div>
+        </div>
+      </section>
+
+      <footer class="setup-footer">
+        <div>
+          <strong>无需等待所有服务配置完成</strong>
+          <p>连接状态会保留在配置助手里，之后可以随时回来继续。</p>
+        </div>
+        <button class="setup-button primary" id="finish-setup" type="button" disabled>跳过云服务，开始创作</button>
+      </footer>
+    </main>
+
+    <div class="setup-toast" id="setup-toast" role="status" aria-live="polite"></div>
+    <script src="/static/setup.js?v=20260821-2" defer></script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+name: macOS native bootstrap
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-contract:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned uv
+        run: curl -LsSf https://astral.sh/uv/0.12.5/install.sh | sh
+      - name: Install Python and locked dependencies
+        run: |
+          "$HOME/.local/bin/uv" python install 3.12
+          "$HOME/.local/bin/uv" sync --project services/control-plane --python 3.12 --extra test --locked
+      - name: Verify platform and bootstrap contracts
+        env:
+          VIDEO_WORKBENCH_AUTOMATION_SCHEDULER_ENABLED: "false"
+          VIDEO_WORKBENCH_PUBLIC_TREND_WEB_ENABLED: "false"
+        run: |
+          "$HOME/.local/bin/uv" run --project services/control-plane pytest \
+            services/control-plane/tests/test_runtime_paths.py \
+            services/control-plane/tests/test_macos_jianying_discovery.py \
+            services/control-plane/tests/test_doctor_cli.py \
+            services/control-plane/tests/test_native_script_contract.py \
+            services/control-plane/tests/test_repo_bootstrap_contract.py -q
+          bash -n scripts/bootstrap.sh scripts/start-local.sh scripts/stop-local.sh
+          python3 scripts/verify-fresh-clone.py --dry-run

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>{{ task.title }} · 视频审核</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/review.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+  </head>
+  <body class="app-page review-page">
+    {% set nav_active = 'review' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main review-main shell" data-task-id="{{ task.id }}">
+      <header class="hero">
+        <div><p class="section-label">审核与交付 / {{ task.content_type }}</p><h1>{{ task.title }}</h1><p>状态：<span class="status">{{ task.status.value }}</span> · 所有批准操作都会写入审计记录。</p></div>
+        <div class="review-head-actions"><div class="rights {{ 'ok' if task.rights_confirmed else 'blocked' }}">素材版权：{{ '已确认' if task.rights_confirmed else '待确认' }}</div><a class="page-return" href="/">← 返回工作台</a></div>
+      </header>
+
+      {% if missing %}<section class="alert"><strong>暂不可批准</strong>：缺少 {{ missing | join('、') }}</section>{% endif %}
+      {% if manifest_error %}<section class="alert"><strong>暂不可批准</strong>：审核清单格式无效，请重新生成 AIGC 声明和三套发布文案。</section>{% endif %}
+      {% if quality_invalid %}<section class="alert"><strong>暂不可批准</strong>：质量报告格式无效，请重新处理任务。</section>{% endif %}
+      {% if quality_blocking %}<section class="alert"><strong>暂不可批准</strong>：成片没有通过全部阻断式质量门禁。</section>{% endif %}
+
+      <section class="review-stage">
+        <div class="video-stage">
+          <header><div><span class="stage-kicker">VIDEO REVIEW</span><strong>成片预览</strong></div><span>1080 × 1920 · 人工终审</span></header>
+          <div class="video-frame">
+            {% if has_preview %}<video id="review-video" controls preload="metadata" src="/api/tasks/{{ task.id }}/artifacts/preview.mp4"></video>{% else %}<p class="muted">预览尚未生成</p>{% endif %}
+          </div>
+          <footer>
+            {% if has_preview %}<a href="/api/tasks/{{ task.id }}/artifacts/preview.mp4">下载 preview.mp4</a>{% endif %}
+            {% if has_captions %}<a href="/api/tasks/{{ task.id }}/artifacts/captions.srt">字幕 SRT</a>{% endif %}
+            {% if has_timeline %}<a href="/api/tasks/{{ task.id }}/artifacts/edit-timeline.json">剪辑时间线</a>{% endif %}
+          </footer>
+        </div>
+
+        <aside id="review-inspector" class="review-inspector" aria-label="智能检查">
+          <div><span class="stage-kicker">SMART CHECK</span><h2>智能检查</h2></div>
+          <dl class="coverage-list">
+            <div><dt>旁白覆盖</dt><dd>{% if narration_coverage is not none %}{{ '%.0f' | format(narration_coverage) }}%{% elif audio_route.get('mode') == 'original' %}原声{% else %}未知{% endif %}</dd></div>
+            <div><dt>字幕覆盖</dt><dd>{% if subtitle_coverage is not none %}{{ '%.0f' | format(subtitle_coverage) }}%{% else %}按语音段{% endif %}</dd></div>
+            <div><dt>音频策略</dt><dd>{{ {'original':'保留原声','mixed':'原声 + 旁白','narration':'完整旁白'}.get(audio_route.get('mode'), '未记录') }}</dd></div>
+            <div><dt>质量门禁</dt><dd class="quality-{{ quality_report.get('status', 'unknown') }}">{{ quality_report.get('status', 'unknown') }}</dd></div>
+          </dl>
+          <p class="inspector-note">{{ audio_route.get('reason', audio_route.get('decision_reason', '尚未记录音频路由原因')) }}</p>
+          {% if has_draft %}<a class="draft-action" href="/api/tasks/{{ task.id }}/artifacts/draft.zip">在剪映中导入草稿</a>{% endif %}
+        </aside>
+      </section>
+
+      <section id="review-issues" class="panel issue-panel">
+        <div class="panel-heading"><div><p class="section-label">ISSUE LOCATOR</p><h2>需要关注的问题</h2></div><span>{{ review_issues | length }} 项</span></div>
+        <div class="issue-list">
+          {% for issue in review_issues %}
+          <article class="issue-row {{ issue.status }}">
+            <div><strong>{{ issue.title }}</strong><p>{{ issue.message }}</p></div>
+            {% if issue.seek_seconds is not none %}<button type="button" data-seek-seconds="{{ issue.seek_seconds }}">定位到 {{ '%.1f' | format(issue.seek_seconds) }}s</button>{% else %}<span>全片检查</span>{% endif %}
+          </article>
+          {% else %}<p class="muted">没有机械检查问题，仍建议完整播放一遍。</p>{% endfor %}
+        </div>
+      </section>
+
+      {% set profile = manifest.get('production_profile', {}) %}
+      {% set quality = quality_report %}
+      {% set usage = task_usage.get('totals', {}) %}
+      <div class="review-details-grid">
+        <section class="panel usage-panel">
+          <div class="panel-heading"><div><p class="section-label">CLOUD COST TRACE</p><h2>本条视频云端消耗</h2></div><a href="/settings/cloud-usage">查看用量中心</a></div>
+          <div class="metric-grid usage-metrics">
+            <div><strong>{{ '%.1f' | format(usage.get('asr_audio_seconds', 0)) }}</strong><span>ASR 音频秒</span></div>
+            <div><strong>{{ '%.0f' | format(usage.get('tts_characters', 0)) }}</strong><span>TTS 字符</span></div>
+            <div><strong>{{ '%.1f' | format(usage.get('voiceover_seconds', 0)) }}</strong><span>旁白音频秒</span></div>
+            <div><strong>{{ '%.0f' | format(usage.get('total_tokens', 0)) }}</strong><span>Dify Token</span></div>
+          </div>
+          {% if task_usage.get('unapplied_calls', 0) %}<p class="usage-warning">有 {{ task_usage.get('unapplied_calls') }} 条云端调用已计费但结果未应用。</p>{% endif %}
+        </section>
+
+        <section class="panel quality-panel">
+          <div class="panel-heading"><div><p class="section-label">QUALITY GATES</p><h2>质量门禁</h2></div><span class="engine-tag quality-{{ quality.get('status', 'unknown') }}">{{ quality.get('status', 'unknown') }}</span></div>
+          <p>制作档位：{{ profile.get('quality_profile', '未记录') }} · 云端处理：{{ '允许' if profile.get('cloud_processing_allowed') else '禁止' }}</p>
+          <div class="gate-list">
+            {% for gate in quality.get('gates', []) %}<article class="gate-row {{ gate.status }}"><span>{{ '阻断' if gate.blocking else '提示' }}</span><div><strong>{{ gate.name }}</strong><p>{{ gate.message }}</p></div></article>{% else %}<p class="muted">质量报告尚未生成</p>{% endfor %}
+          </div>
+        </section>
+      </div>
+
+      {% set summary = manifest.get('analysis_summary', {}) %}
+      <section class="panel evidence-panel">
+        <div class="panel-heading"><div><p class="section-label">LOCAL INTELLIGENCE</p><h2>剪辑理解证据</h2></div><span class="engine-tag">本地可复现</span></div>
+        <div class="metric-grid">
+          <div><strong>{{ summary.get('material_count', 0) }}</strong><span>份视频素材</span></div>
+          <div><strong>{{ summary.get('transcript_segments', 0) }}</strong><span>段语音转写</span></div>
+          <div><strong>{{ summary.get('scene_count', 0) }}</strong><span>个场景区间</span></div>
+          <div><strong>{{ summary.get('silence_count', 0) }}</strong><span>处静音检测</span></div>
+          <div><strong>{{ summary.get('keyframe_count', 0) }}</strong><span>张关键帧</span></div>
+          <div><strong>{{ summary.get('ocr_text_count', 0) }}</strong><span>条 OCR 文本</span></div>
+        </div>
+        <div class="timeline-list" aria-label="智能剪辑时间线">
+          {% for clip in manifest.get('timeline', []) %}
+          <button class="timeline-row" type="button" data-timeline-start="{{ clip.start_seconds }}" data-seek-seconds="{{ clip.start_seconds }}">
+            <span class="timecode">{{ '%.1f' | format(clip.start_seconds) }}s → {{ '%.1f' | format(clip.end_seconds) }}s</span>
+            <span><strong>{{ clip.reason }}</strong><small>原素材 {{ '%.1f' | format(clip.source_start_seconds) }}s–{{ '%.1f' | format(clip.source_end_seconds) }}s · 评分 {{ '%.1f' | format(clip.score) }}</small></span>
+          </button>
+          {% else %}<p class="muted">尚未生成剪辑时间线</p>{% endfor %}
+        </div>
+      </section>
+
+      <section class="panel copy-panel">
+        <div class="panel-heading"><div><p class="section-label">PUBLISH COPY</p><h2>发布文案候选</h2></div><span>人工确认后使用</span></div>
+        <div class="copy-grid">
+          {% for copy in manifest.get('publish_copy', []) %}<article class="copy-card"><span>方案 {{ loop.index }}</span><h3>{{ copy.title }}</h3><p>{{ copy.body }}</p><div class="topics">{% for topic in copy.topics %}#{{ topic }} {% endfor %}</div></article>{% else %}<p class="muted">尚未生成发布文案</p>{% endfor %}
+        </div>
+      </section>
+
+      <details class="panel evidence-disclosure">
+        <summary>AIGC 声明、生成证据与警告</summary>
+        <div class="disclosure-grid"><div><h2>AIGC 声明</h2><p>{{ manifest.get('aigc_declaration', '尚未填写') }}</p><h2>证据</h2><ul>{% for item in manifest.get('evidence', []) %}<li>{{ item }}</li>{% else %}<li class="muted">暂无证据记录</li>{% endfor %}</ul></div><div><h2>警告</h2><ul>{% for item in manifest.get('warnings', []) %}<li>{{ item }}</li>{% else %}<li class="muted">无机械检查警告</li>{% endfor %}</ul><div class="downloads">{% if has_draft %}<a href="/api/tasks/{{ task.id }}/artifacts/draft.zip">下载剪映 draft.zip</a>{% endif %}{% if has_render_report %}<a href="/api/tasks/{{ task.id }}/artifacts/render-report.json">渲染报告</a>{% endif %}{% if has_quality_report %}<a href="/api/tasks/{{ task.id }}/artifacts/quality-report.json">质量报告</a>{% endif %}<a href="/api/tasks/{{ task.id }}/manifest">交付清单</a></div></div></div>
+      </details>
+
+      <section class="panel decision douyin-delivery" aria-labelledby="douyin-delivery-title">
+        <div><p class="section-label">OFFICIAL DELIVERY</p><h2 id="douyin-delivery-title">抖音官方交付</h2></div>
+        <p>“仅自己可见”会创建并提交审核，不是客户端草稿箱。需要先人工批准，并完成抖音开放平台 OAuth。</p>
+        <label><span>发布标题与话题</span><input id="douyin-title" maxlength="1000" value="{{ task.title }}"></label>
+        <label><span>可见范围</span><select id="douyin-visibility"><option value="self">仅自己可见</option><option value="public">公开发布</option><option value="friends">好友可见</option></select></label>
+        <div class="actions"><button id="deliver-douyin" class="button approve" type="button" {% if task.status.value != 'approved' %}disabled{% endif %}>提交到抖音开放平台</button></div>
+        <p id="delivery-result" class="muted">当前交付状态：{{ task.delivery_state.value if task.delivery_state else '剪映本地草稿待审核' }}</p>
+      </section>
+
+      <section class="panel decision">
+        <div><p class="section-label">HUMAN DECISION</p><h2>人工决策</h2></div>
+        <textarea id="comment" placeholder="填写核对说明或修改意见"></textarea>
+        <div class="actions"><button class="button danger" data-decision="request_changes">退回修改</button><button class="button approve" data-decision="approve" {% if missing or manifest_error or quality_invalid or quality_blocking or not task.rights_confirmed %}disabled{% endif %}>确认批准</button></div>
+        <p id="result" class="muted"></p>
+      </section>
+    </main>
+    <script src="/static/review.js" defer></script>
+  </body>
+</html>
