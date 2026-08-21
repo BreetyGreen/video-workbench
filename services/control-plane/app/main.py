@@ -7,10 +7,11 @@ import logging
 from pathlib import Path
 import platform as host_platform
 import secrets
+import shutil
 from typing import Callable
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
@@ -51,6 +52,7 @@ from app.schemas.automation import (
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
 from app.schemas.materials import MaterialAcquisitionRequest
+from app.schemas.setup import SetupPreferencesUpdate
 from app.services.automation_service import (
     AutomationScheduler,
     DailyAutomation,
@@ -77,6 +79,7 @@ from app.services.task_service import (
 )
 from app.services.usage_service import UsageService
 from app.services.voice_catalog_service import VoiceCatalogService
+from app.services.setup_service import SetupService
 logger = logging.getLogger(__name__)
 
 
@@ -156,6 +159,7 @@ def create_app(
     cloud_usage = CloudUsageService(usage_key, usage_client_factory)
     voice_catalog = VoiceCatalogService(speech_client.voice_type)
     voice_usage = UsageService()
+    setup_service = SetupService(app_settings.data_dir)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -185,18 +189,7 @@ def create_app(
     def session_dependency():
         yield from database.session()
 
-    @app.get("/health", response_model=HealthRead)
-    def health() -> HealthRead:
-        app_settings.material_dir.mkdir(parents=True, exist_ok=True)
-        database.is_healthy()
-        return HealthRead(status="ok", database="ok", artifact_storage="ok")
-
-    @app.get("/", response_class=HTMLResponse)
-    def workbench(request: Request):
-        return templates.TemplateResponse(request, "workbench.html", {})
-
-    @app.get("/api/local-runtime")
-    def local_runtime_status():
+    def local_runtime_snapshot() -> dict:
         system = host_platform.system()
         runtime_paths = resolve_runtime_paths(system=system, home=Path.home())
         location = discover_jianying(home=Path.home(), system=system)
@@ -207,6 +200,10 @@ def create_app(
                 "data_dir": str(app_settings.data_dir),
                 "inbox_dir": str(runtime_paths.inbox_dir),
             },
+            "tools": {
+                "ffmpeg": shutil.which(app_settings.ffmpeg_bin) is not None,
+                "ffprobe": shutil.which(app_settings.ffprobe_bin) is not None,
+            },
             "jianying": {
                 "installed": location.installed,
                 "app_path": str(location.app_path) if location.app_path else None,
@@ -215,20 +212,7 @@ def create_app(
             },
         }
 
-    @app.get("/settings/cloud-usage", response_class=HTMLResponse)
-    def cloud_usage_settings_page(request: Request):
-        return templates.TemplateResponse(request, "cloud_usage_settings.html", {})
-
-    @app.get("/voices", response_class=HTMLResponse)
-    def voice_center_page(request: Request):
-        return templates.TemplateResponse(request, "voices.html", {})
-
-    @app.get("/materials", response_class=HTMLResponse)
-    def material_center_page(request: Request):
-        return templates.TemplateResponse(request, "materials.html", {})
-
-    @app.get("/api/materials/status")
-    def material_status(session: Session = Depends(session_dependency)):
+    def material_status_snapshot(session: Session) -> dict:
         counts = material_library.provider_counts(session)
         return {
             "total": sum(counts.values()),
@@ -246,6 +230,124 @@ def create_app(
             "seedance": seedance_client.status(),
             "fallback": "rights_confirmed_local_catalog",
         }
+
+    def integration_status_snapshot() -> dict[str, dict[str, str]]:
+        missing_dingtalk = []
+        if not app_settings.dingtalk_client_id:
+            missing_dingtalk.append("client_id")
+        if not app_settings.dingtalk_client_secret:
+            missing_dingtalk.append("client_secret")
+        dingtalk = (
+            {"status": "configured"}
+            if not missing_dingtalk
+            else {
+                "status": "not_configured",
+                "reason": f"missing_{'_and_'.join(missing_dingtalk)}",
+            }
+        )
+        return {
+            "dify": analysis_client.status(),
+            "dingtalk": dingtalk,
+            "douyin": douyin_client.status(),
+            "public_trends": public_trend_client.status(),
+            "pixabay": pixabay_client.status(),
+            "seedance": seedance_client.status(),
+            "douyin_delivery": (
+                {"status": "configured", "provider": "douyin_open_platform"}
+                if app_settings.douyin_open_id and app_settings.douyin_access_token
+                else {
+                    "status": "oauth_required",
+                    "provider": "douyin_open_platform",
+                    "reason": "missing_open_id_or_access_token",
+                }
+            ),
+            "materials": {
+                "status": "configured",
+                "provider": "pexels_official_api" if pexels_client.configured else "local_catalog",
+                "fallback": "rights_confirmed_local_catalog",
+            },
+            "asr": (
+                {"status": "configured", "provider": "volcano_bigasr"}
+                if app_settings.volcano_asr_api_key
+                or (app_settings.volcano_asr_app_key and app_settings.volcano_asr_access_key)
+                else {
+                    "status": "partially_configured",
+                    "provider": "local_whisper",
+                    "reason": "cloud_not_configured_local_quality_available",
+                }
+            ),
+            "tts": (
+                {
+                    "status": "configured",
+                    "provider": "doubao_tts_2_0",
+                    "voice_type": speech_client.voice_type,
+                }
+                if speech_client.configured
+                else {
+                    "status": "not_configured",
+                    "provider": "doubao_tts_2_0",
+                    "reason": "missing_api_key",
+                }
+            ),
+            "reference_intelligence": {
+                "status": "configured",
+                "provider": "local_structural",
+            },
+        }
+
+    def setup_status_snapshot(session: Session) -> dict:
+        return setup_service.status(
+            runtime=local_runtime_snapshot(),
+            integrations=integration_status_snapshot(),
+            materials=material_status_snapshot(session),
+        )
+
+    @app.get("/health", response_model=HealthRead)
+    def health() -> HealthRead:
+        app_settings.material_dir.mkdir(parents=True, exist_ok=True)
+        database.is_healthy()
+        return HealthRead(status="ok", database="ok", artifact_storage="ok")
+
+    @app.get("/", response_class=HTMLResponse)
+    def workbench(request: Request):
+        if not setup_service.preferences()["local_mode_confirmed"]:
+            return RedirectResponse(url="/setup", status_code=307)
+        return templates.TemplateResponse(request, "workbench.html", {})
+
+    @app.get("/api/local-runtime")
+    def local_runtime_status():
+        return local_runtime_snapshot()
+
+    @app.get("/api/setup/status")
+    def setup_status(session: Session = Depends(session_dependency)):
+        return setup_status_snapshot(session)
+
+    @app.put("/api/setup/preferences")
+    def update_setup_preferences(update: SetupPreferencesUpdate):
+        return setup_service.update_preferences(local_mode_confirmed=update.local_mode_confirmed)
+
+    @app.post("/api/setup/validate/{provider_id}")
+    def validate_setup_provider(provider_id: str, session: Session = Depends(session_dependency)):
+        cards = {card["id"]: card for card in setup_status_snapshot(session)["providers"]}
+        if provider_id not in cards:
+            raise HTTPException(status_code=404, detail={"code": "unknown_setup_provider"})
+        return cards[provider_id]
+
+    @app.get("/settings/cloud-usage", response_class=HTMLResponse)
+    def cloud_usage_settings_page(request: Request):
+        return templates.TemplateResponse(request, "cloud_usage_settings.html", {})
+
+    @app.get("/voices", response_class=HTMLResponse)
+    def voice_center_page(request: Request):
+        return templates.TemplateResponse(request, "voices.html", {})
+
+    @app.get("/materials", response_class=HTMLResponse)
+    def material_center_page(request: Request):
+        return templates.TemplateResponse(request, "materials.html", {})
+
+    @app.get("/api/materials/status")
+    def material_status(session: Session = Depends(session_dependency)):
+        return material_status_snapshot(session)
 
     @app.get("/api/materials")
     def read_materials(
@@ -474,68 +576,7 @@ def create_app(
 
     @app.get("/api/integrations/status")
     def integration_status() -> dict[str, dict[str, str]]:
-        missing_dingtalk = []
-        if not app_settings.dingtalk_client_id:
-            missing_dingtalk.append("client_id")
-        if not app_settings.dingtalk_client_secret:
-            missing_dingtalk.append("client_secret")
-        dingtalk = (
-            {"status": "configured"}
-            if not missing_dingtalk
-            else {
-                "status": "not_configured",
-                "reason": f"missing_{'_and_'.join(missing_dingtalk)}",
-            }
-        )
-        return {
-            "dify": analysis_client.status(),
-            "dingtalk": dingtalk,
-            "douyin": douyin_client.status(),
-            "public_trends": public_trend_client.status(),
-            "pixabay": pixabay_client.status(),
-            "seedance": seedance_client.status(),
-            "douyin_delivery": (
-                {"status": "configured", "provider": "douyin_open_platform"}
-                if app_settings.douyin_open_id and app_settings.douyin_access_token
-                else {
-                    "status": "oauth_required",
-                    "provider": "douyin_open_platform",
-                    "reason": "missing_open_id_or_access_token",
-                }
-            ),
-            "materials": {
-                "status": "configured",
-                "provider": "pexels_official_api" if pexels_client.configured else "local_catalog",
-                "fallback": "rights_confirmed_local_catalog",
-            },
-            "asr": (
-                {"status": "configured", "provider": "volcano_bigasr"}
-                if app_settings.volcano_asr_api_key
-                or (app_settings.volcano_asr_app_key and app_settings.volcano_asr_access_key)
-                else {
-                    "status": "partially_configured",
-                    "provider": "local_whisper",
-                    "reason": "cloud_not_configured_local_quality_available",
-                }
-            ),
-            "tts": (
-                {
-                    "status": "configured",
-                    "provider": "doubao_tts_2_0",
-                    "voice_type": speech_client.voice_type,
-                }
-                if speech_client.configured
-                else {
-                    "status": "not_configured",
-                    "provider": "doubao_tts_2_0",
-                    "reason": "missing_api_key",
-                }
-            ),
-            "reference_intelligence": {
-                "status": "configured",
-                "provider": "local_structural",
-            },
-        }
+        return integration_status_snapshot()
 
     @app.get("/api/automations/daily", response_model=DailyScheduleRead)
     def read_daily_schedule(

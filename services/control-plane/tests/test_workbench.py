@@ -16,6 +16,8 @@ def test_workbench_page_and_operational_lists(tmp_path: Path):
         automation_enabled=False,
     )
     with TestClient(create_app(settings)) as client:
+        confirmation = client.put("/api/setup/preferences", json={"local_mode_confirmed": True})
+        assert confirmation.status_code == 200
         page = client.get("/")
         assert page.status_code == 200
         assert "视频生产控制台" in page.text
