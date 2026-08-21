@@ -32,6 +32,8 @@ def test_fresh_clone_verifier_exercises_setup_activation():
     assert '"/api/setup/preferences"' in text
     assert '"local_mode_confirmed": True' in text
     assert '"setup_smoke": "passed"' in text
+    assert "_prepare_smoke_tool_path" in text
+    assert '"smoke-bin"' in text
 
 
 def test_fresh_clone_verifier_stops_the_service_process_tree():

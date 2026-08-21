@@ -66,6 +66,31 @@ def _request_json(url: str, *, method: str = "GET", payload: dict[str, object] |
         return json.loads(response.read().decode("utf-8"))
 
 
+def _prepare_smoke_tool_path(environment: dict[str, str], fake_home: Path) -> None:
+    """Model the post-bootstrap tool state without installing host packages in CI."""
+    missing = [
+        tool
+        for tool in ("ffmpeg", "ffprobe")
+        if not shutil.which(tool, path=environment.get("PATH"))
+    ]
+    if not missing:
+        return
+
+    bin_dir = fake_home / "smoke-bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    for tool in missing:
+        if os.name == "nt":
+            executable = bin_dir / f"{tool}.cmd"
+            executable.write_text("@exit /b 0\n", encoding="utf-8")
+        else:
+            executable = bin_dir / tool
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+    environment["PATH"] = os.pathsep.join(
+        part for part in (str(bin_dir), environment.get("PATH", "")) if part
+    )
+
+
 def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str, str]) -> None:
     uv_bin = environment.get("UV_BIN") or shutil.which("uv")
     if not uv_bin:
@@ -75,6 +100,7 @@ def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str
     runtime_dir = fake_home / "VideoWorkbench"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     service_environment = environment.copy()
+    _prepare_smoke_tool_path(service_environment, fake_home)
     service_environment.update(
         {
             "HOME": str(fake_home),
