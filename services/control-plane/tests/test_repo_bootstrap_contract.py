@@ -21,6 +21,17 @@ def test_readme_leads_with_clone_and_codex_startup():
     assert "git clone" in first_screen
     assert "Codex" in first_screen
     assert "不需要填写 .env" in first_screen
+    assert "/setup" in text
+    assert "本地模式" in text
+
+
+def test_fresh_clone_verifier_exercises_setup_activation():
+    text = (ROOT / "scripts" / "verify-fresh-clone.py").read_text(encoding="utf-8")
+
+    assert '"/setup"' in text
+    assert '"/api/setup/preferences"' in text
+    assert '"local_mode_confirmed": True' in text
+    assert '"setup_smoke": "passed"' in text
 
 
 def test_macos_runbook_documents_real_runtime_locations():

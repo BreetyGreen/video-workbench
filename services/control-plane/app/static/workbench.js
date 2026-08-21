@@ -105,6 +105,16 @@ async function loadIntegrations() {
   $("#last-refresh").textContent = `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+async function loadSetupProgress() {
+  const setup = await api("/api/setup/status");
+  const node = $("#setup-progress");
+  const configured = setup.progress?.configured_optional || 0;
+  const total = setup.progress?.optional_total || 0;
+  node.querySelector("span").textContent = setup.local_mode?.ready
+    ? `本地已就绪 · ${configured}/${total} 项增强`
+    : "本机环境需要处理";
+}
+
 async function loadLocalRuntime() {
   const runtime = await api("/api/local-runtime");
   const jianying = runtime.jianying || {};
@@ -297,7 +307,7 @@ async function loadRuns() {
 }
 
 async function loadWorkbench() {
-  const results = await Promise.allSettled([loadIntegrations(), loadLocalRuntime(), loadCloudUsage(), loadSchedule(), loadTasks(), loadTrends(), loadRuns()]);
+  const results = await Promise.allSettled([loadIntegrations(), loadSetupProgress(), loadLocalRuntime(), loadCloudUsage(), loadSchedule(), loadTasks(), loadTrends(), loadRuns()]);
   const failed = results.filter((result) => result.status === "rejected");
   if (failed.length) toast(`有 ${failed.length} 项数据读取失败，请刷新重试`);
 }

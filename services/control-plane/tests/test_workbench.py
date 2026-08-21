@@ -45,6 +45,8 @@ def test_workbench_page_and_operational_lists(tmp_path: Path):
         assert 'id="cloud-usage-cards"' in page.text
         assert 'id="local-runtime-status"' in page.text
         assert "路径会自动发现" in page.text
+        assert 'id="setup-progress"' in page.text
+        assert 'href="/setup"' in page.text
         assert 'id="show-archived"' in page.text
         assert "查看归档" in page.text
         assert 'name="quality_profile"' in page.text
@@ -86,6 +88,8 @@ def test_workbench_assets_are_served(tmp_path: Path):
         assert "loadWorkbench" in script.text
         assert "loadCloudUsage" in script.text
         assert "loadLocalRuntime" in script.text
+        assert "loadSetupProgress" in script.text
+        assert "/api/setup/status" in script.text
         assert "updateCreationPreflight" in script.text
         assert "bindCreationControls" in script.text
         assert "/api/cloud-usage/refresh" in script.text

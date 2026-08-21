@@ -90,7 +90,7 @@ class SetupService:
             "status": "configured" if configured else "partially_configured" if partial else "not_configured",
             "detail": "未连接时自动使用本地 Whisper 和本地剪辑。",
             "fallback": "本地 Whisper 与本地剪辑",
-            "official_url": "https://console.volcengine.com/ark",
+            "official_url": "https://console.volcengine.com/ark/apiKey",
             "guide_url": "/docs/user-required-actions#火山引擎",
             "fields": ["方舟访问凭证（按需）", "语音服务凭证（按需）", "只读用量凭证（按需）"],
             "next_action": "按需要分别开通模型、语音或只读用量查询。",

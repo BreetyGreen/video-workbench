@@ -22,7 +22,7 @@
 }
 .page-head > *, .section-heading > *, .strip-heading > * { min-width: 0; }
 
-.page-head h1 { margin: 0.15rem 0 0.35rem; font-size: var(--step-4); line-height: 1.08; letter-spacing: -0.045em; }
+.page-head h1 { margin: 0.15rem 0 0.35rem; font-size: var(--step-4); line-height: 1.08; letter-spacing: -0.035em; }
 .page-head p { max-width: 46rem; margin: 0; color: var(--color-ink-muted); }
 .eyebrow { color: var(--color-accent-strong) !important; font-size: 0.6875rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
 .page-head-actions { display: flex; align-items: center; gap: 0.85rem; color: var(--color-ink-muted); font-size: var(--step--1); white-space: nowrap; }
@@ -47,6 +47,10 @@ h3 { margin: 0; font-size: var(--step-0); }
 .integration-strip { margin-bottom: 1rem; padding: 1rem 1.25rem; }
 .strip-heading { align-items: center; margin-bottom: 0.75rem; }
 .strip-heading h2 { font-size: var(--step-0); }
+.integration-heading-actions { display: flex; align-items: center; gap: 1rem; }
+.setup-progress-link { display: grid; color: var(--color-accent-strong); line-height: 1.2; text-align: right; text-decoration: none; }
+.setup-progress-link strong { font-size: var(--step--1); }
+.setup-progress-link span { margin-top: 0.2rem; color: var(--color-ink-muted); font-size: 0.6875rem; font-weight: 600; }
 .integration-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem; }
 .integration { display: grid; grid-template-columns: auto 1fr; gap: 0 0.5rem; align-items: center; min-width: 0; border-radius: var(--radius-sm); background: var(--color-surface-subtle); padding: 0.65rem 0.75rem; }
 .integration strong { overflow: hidden; font-size: var(--step--1); text-overflow: ellipsis; white-space: nowrap; }

@@ -72,6 +72,7 @@ function providerMarkup(provider) {
       </div>
       <p class="provider-summary">${escapeHtml(provider.summary)}</p>
       <p class="provider-detail">${escapeHtml(provider.detail)}</p>
+      <p class="provider-detail"><strong>下一步：</strong>${escapeHtml(provider.next_action)}</p>
       <ul class="provider-meta">${(provider.fields || []).map((field) => `<li>${escapeHtml(field)}</li>`).join("")}</ul>
       <p class="provider-fallback">未连接时：${escapeHtml(provider.fallback)}</p>
       <div class="provider-actions">
