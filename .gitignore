@@ -4,6 +4,7 @@
 !.env.example
 .superpowers/
 .worktrees/
+.tmp/
 data/
 docs/verification/
 services/control-plane/.venv/
