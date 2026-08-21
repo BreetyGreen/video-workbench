@@ -45,7 +45,7 @@ function renderRuntime(status) {
   const jianying = runtime.jianying || {};
   const rows = [
     ["FFmpeg 视频引擎", tools.ffmpeg && tools.ffprobe ? "已发现 FFmpeg 与 FFprobe" : "未发现完整视频工具，请重新运行启动脚本", tools.ffmpeg && tools.ffprobe],
-    ["本地数据", runtime.runtime?.data_dir || "等待创建", runtime.local_mode?.ready !== false],
+    ["本地数据", runtime.runtime?.data_dir || "等待创建", Boolean(runtime.runtime?.data_dir)],
     ["素材收件箱", runtime.runtime?.inbox_dir || "等待创建", Boolean(runtime.runtime?.inbox_dir)],
     ["剪映交付", jianying.draft_root ? "草稿目录已发现" : jianying.installed ? "已安装；首次导入时选择草稿目录" : "未安装；仍可生成草稿 ZIP", Boolean(jianying.installed || jianying.draft_root)],
   ];

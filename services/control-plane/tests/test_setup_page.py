@@ -43,9 +43,13 @@ def test_setup_assets_are_served_and_use_real_apis(client: TestClient):
     assert stylesheet.status_code == 200
     assert ".setup-provider-list" in stylesheet.text
     assert "minmax(17.5rem, 1fr)" in stylesheet.text
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in stylesheet.text
+    assert ".setup-head > *," in stylesheet.text
     assert "prefers-reduced-motion" in stylesheet.text
     assert script.status_code == 200
     assert "/api/setup/status" in script.text
+    assert "runtime.runtime?.data_dir" in script.text
+    assert "runtime.runtime?.inbox_dir" in script.text
     assert "/api/setup/preferences" in script.text
     assert "/api/setup/validate/" in script.text
     assert "localStorage" not in script.text

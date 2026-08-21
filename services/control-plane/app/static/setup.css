@@ -12,6 +12,13 @@
   margin-inline: auto;
 }
 
+.setup-head > *,
+.local-ready > *,
+.setup-footer > *,
+.provider-heading > * {
+  min-width: 0;
+}
+
 .setup-head {
   display: flex;
   align-items: flex-start;
@@ -217,9 +224,14 @@
   .setup-head, .local-ready, .setup-footer { align-items: stretch; flex-direction: column; }
   .setup-head h1 { font-size: 1.75rem; }
   .setup-link { align-self: flex-start; }
-  .setup-progress li { gap: 0; }
+  .setup-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .setup-progress li { justify-content: center; gap: 0; }
   .setup-progress strong { display: none; }
-  .setup-progress li:not(:last-child)::after { margin-inline: 0.45rem; }
+  .setup-progress li:not(:last-child)::after {
+    position: absolute;
+    inset: 50% calc(-50% + 1.15rem) auto calc(50% + 1.15rem);
+    margin: 0;
+  }
   .provider-heading { align-items: flex-start; flex-direction: column; }
   .local-ready .setup-button, .setup-footer .setup-button { width: 100%; }
 }
