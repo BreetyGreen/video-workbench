@@ -14,6 +14,7 @@
     </div>
     <div class="app-nav-group">
       <span class="app-nav-label">管理</span>
+      <a href="/setup"{% if nav_active == 'setup' %} aria-current="page"{% endif %}><span aria-hidden="true">✓</span><span>配置助手</span></a>
       <a href="/settings/cloud-usage"{% if nav_active == 'cloud_usage' %} aria-current="page"{% endif %}><span aria-hidden="true">◎</span><span>用量与成本</span></a>
       <a href="/docs"><span aria-hidden="true">⌘</span><span>API 文档</span></a>
     </div>
@@ -31,6 +32,7 @@
     <a href="/trends"{% if nav_active == 'trends' %} aria-current="page"{% endif %}>热点</a>
     <a href="/materials"{% if nav_active == 'materials' %} aria-current="page"{% endif %}>素材</a>
     <a href="/voices"{% if nav_active == 'voices' %} aria-current="page"{% endif %}>音色</a>
+    <a href="/setup"{% if nav_active == 'setup' %} aria-current="page"{% endif %}>配置</a>
     <a href="/settings/cloud-usage"{% if nav_active == 'cloud_usage' %} aria-current="page"{% endif %}>用量</a>
   </nav>
 </header>

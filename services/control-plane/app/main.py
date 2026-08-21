@@ -314,6 +314,10 @@ def create_app(
             return RedirectResponse(url="/setup", status_code=307)
         return templates.TemplateResponse(request, "workbench.html", {})
 
+    @app.get("/setup", response_class=HTMLResponse)
+    def setup_page(request: Request):
+        return templates.TemplateResponse(request, "setup.html", {})
+
     @app.get("/api/local-runtime")
     def local_runtime_status():
         return local_runtime_snapshot()
