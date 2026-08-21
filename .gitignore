@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .superpowers/
+.worktrees/
 data/
 docs/verification/
 services/control-plane/.venv/
