@@ -34,6 +34,15 @@ def test_fresh_clone_verifier_exercises_setup_activation():
     assert '"setup_smoke": "passed"' in text
 
 
+def test_fresh_clone_verifier_stops_the_service_process_tree():
+    text = (ROOT / "scripts" / "verify-fresh-clone.py").read_text(encoding="utf-8")
+
+    assert "CREATE_NEW_PROCESS_GROUP" in text
+    assert "start_new_session" in text
+    assert "killpg" in text
+    assert '"taskkill"' in text
+
+
 def test_macos_runbook_documents_real_runtime_locations():
     text = (ROOT / "docs" / "runbooks" / "macos-local.md").read_text(encoding="utf-8")
 

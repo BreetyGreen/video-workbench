@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -106,6 +107,8 @@ def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        start_new_session=os.name != "nt",
     )
     try:
         _wait_for_service(f"{base_url}/health", process)
@@ -128,11 +131,27 @@ def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str
         if response.status != 200 or "今天想让观众记住什么？" not in workbench_html:
             raise RuntimeError("fresh-clone workbench did not open after local confirmation")
     finally:
-        process.terminate()
+        if process.poll() is None and os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        elif process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            process.kill()
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5)
 
 
