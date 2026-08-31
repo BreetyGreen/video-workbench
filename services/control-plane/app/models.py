@@ -292,6 +292,15 @@ class CloudCredential(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ProviderCredential(SQLModel, table=True):
+    __tablename__ = "provider_credentials"
+
+    provider_id: str = Field(primary_key=True)
+    encrypted_values_json: str = "{}"
+    masked_values_json: str = "{}"
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class UsageEvent(SQLModel, table=True):
     __tablename__ = "usage_events"
 

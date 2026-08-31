@@ -52,6 +52,7 @@ from app.schemas.automation import (
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
 from app.schemas.materials import MaterialAcquisitionRequest
+from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
 from app.services.automation_service import (
     AutomationScheduler,
@@ -80,6 +81,7 @@ from app.services.task_service import (
 from app.services.usage_service import UsageService
 from app.services.voice_catalog_service import VoiceCatalogService
 from app.services.setup_service import SetupService
+from app.services.provider_settings_service import ProviderSettingsService
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +96,17 @@ def create_app(
 ) -> FastAPI:
     app_settings = settings or Settings()
     database = Database(app_settings.database_url)
+    database.create_all()
+    usage_key = app_settings.usage_secret_master_key.strip()
+    if not usage_key:
+        key_path = app_settings.data_dir / ".usage-secret-key"
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        if not key_path.exists():
+            key_path.write_text(secrets.token_urlsafe(32), encoding="utf-8")
+        usage_key = key_path.read_text(encoding="utf-8").strip()
+    provider_settings = ProviderSettingsService(usage_key)
+    with Session(database.engine) as provider_session:
+        provider_settings.apply(provider_session, app_settings)
     review_service = ReviewService(app_settings.artifact_dir)
     analysis_client = dify_client or DifyClient(app_settings)
     speech_client = tts_client or VolcanoTTSClient(
@@ -149,13 +162,6 @@ def create_app(
     templates.env.globals["workbench_asset_version"] = hashlib.sha256(
         (app_dir / "static" / "workbench.js").read_bytes()
     ).hexdigest()[:12]
-    usage_key = app_settings.usage_secret_master_key.strip()
-    if not usage_key:
-        key_path = app_settings.data_dir / ".usage-secret-key"
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        if not key_path.exists():
-            key_path.write_text(secrets.token_urlsafe(32), encoding="utf-8")
-        usage_key = key_path.read_text(encoding="utf-8").strip()
     cloud_usage = CloudUsageService(usage_key, usage_client_factory)
     voice_catalog = VoiceCatalogService(speech_client.voice_type)
     voice_usage = UsageService()
@@ -183,6 +189,7 @@ def create_app(
     app.state.settings = app_settings
     app.state.database = database
     app.state.cloud_usage = cloud_usage
+    app.state.provider_settings = provider_settings
     app.state.automation_scheduler_started = False
     app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
 
@@ -351,6 +358,39 @@ def create_app(
     @app.get("/settings/cloud-usage", response_class=HTMLResponse)
     def cloud_usage_settings_page(request: Request):
         return templates.TemplateResponse(request, "cloud_usage_settings.html", {})
+
+    @app.get("/settings/providers", response_class=HTMLResponse)
+    def provider_settings_page(request: Request):
+        return templates.TemplateResponse(request, "provider_settings.html", {})
+
+    @app.get("/api/provider-settings")
+    def read_provider_settings(session: Session = Depends(session_dependency)):
+        return provider_settings.status(session)
+
+    @app.put("/api/provider-settings/{provider_id}")
+    def save_provider_settings(
+        provider_id: str,
+        update: ProviderSettingsUpdate,
+        session: Session = Depends(session_dependency),
+    ):
+        try:
+            return provider_settings.save(
+                session,
+                provider_id,
+                values=update.values,
+                clear_fields=update.clear_fields,
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail={"code": "unknown_provider"}) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail={"code": str(error)}) from error
+
+    @app.delete("/api/provider-settings/{provider_id}")
+    def delete_provider_settings(provider_id: str, session: Session = Depends(session_dependency)):
+        try:
+            return provider_settings.delete(session, provider_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail={"code": "unknown_provider"}) from error
 
     @app.get("/voices", response_class=HTMLResponse)
     def voice_center_page(request: Request):
