@@ -155,6 +155,25 @@ class PipelineService:
 
     @staticmethod
     def _baseline_copy(task: VideoTask) -> list[dict[str, object]]:
+        brief = f"{task.title} {task.content_type} {task.requirements_text} {task.tutorial_text}".lower()
+        if any(keyword in brief for keyword in ("帽", "hat", "头饰")):
+            return [
+                {
+                    "title": "一顶显脸小的轻量遮阳帽，三个场景看上身效果",
+                    "body": "通勤、旅行和周末出门怎么搭？这顶轻量遮阳帽用柔和帽檐修饰脸型，收纳轻松，也不压整体造型。视频展示三个真实上身场景，颜色与帽围请按自己的实际需求选择。",
+                    "topics": ["遮阳帽", "帽子穿搭", "通勤穿搭", "旅行好物"],
+                },
+                {
+                    "title": "帽子怎么选才不压造型？先看真实上身",
+                    "body": "重点不是夸张滤镜，而是帽檐弧度、脸型修饰和不同场景的搭配效果。轻量好收纳，日常遮阳、通勤和出游都能直接用。",
+                    "topics": ["显脸小帽子", "日常穿搭", "遮阳穿搭", "真实上身"],
+                },
+                {
+                    "title": "轻便、好搭、能遮阳：这顶帽子适合哪些场景？",
+                    "body": "用三个真实片段看帽子的正面、侧面和整体搭配。柔和帽檐自然修饰脸型，出门随手戴，放进行李也不占空间。实际颜色和尺寸以商品信息为准。",
+                    "topics": ["轻量帽子", "旅行穿搭", "夏日遮阳", "帽子推荐"],
+                },
+            ]
         return [
             {
                 "title": f"{task.title}｜版本{i}",
@@ -163,6 +182,38 @@ class PipelineService:
             }
             for i in range(1, 4)
         ]
+
+    @staticmethod
+    def _viral_copy_matches_task(task: VideoTask, viral: ViralAnalysis) -> bool:
+        """Reject obviously off-topic workflow output before it reaches review."""
+        brief = f"{task.title} {task.content_type} {task.requirements_text} {task.tutorial_text}".lower()
+        subject_keywords = (
+            "帽",
+            "宠物",
+            "猫",
+            "狗",
+            "除毛",
+            "服装",
+            "鞋",
+            "包",
+            "美妆",
+            "护肤",
+            "食品",
+            "饮料",
+            "家居",
+            "数码",
+            "手机",
+            "汽车",
+            "母婴",
+            "玩具",
+        )
+        expected = {keyword for keyword in subject_keywords if keyword in brief}
+        if not expected:
+            return True
+        copy_text = " ".join(
+            f"{item.title} {item.body} {' '.join(item.topics)}" for item in viral.publish_copy
+        ).lower()
+        return any(keyword in copy_text for keyword in expected)
 
     @staticmethod
     def _write_analyses(path: Path, analyses: list[MediaAnalysis]) -> None:
@@ -392,6 +443,9 @@ class PipelineService:
                 }
             )
             (analysis_dir / "viral-analysis.json").write_text(viral.model_dump_json(indent=2), encoding="utf-8")
+            if not self._viral_copy_matches_task(task, viral):
+                warnings.append("Dify 候选文案与当前任务主题不相关，已回退到本地同主题文案。")
+                return None
             evidence.append(f"Dify 爆款分析：使用 {len(trend_payload)} 条带来源公开趋势记录")
             evidence.extend(
                 f"趋势证据：{item.metric}={item.value}（{item.source_type}）"
