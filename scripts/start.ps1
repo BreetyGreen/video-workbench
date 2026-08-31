@@ -9,6 +9,65 @@ $composePath = Join-Path $projectRoot 'deploy\compose.yml'
 $envPath = Join-Path $projectRoot '.env'
 $envExamplePath = Join-Path $projectRoot '.env.example'
 
+function Test-WorkbenchHealth {
+    param([int]$Port)
+    try {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 3
+        return $health.status -eq 'ok'
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-LoopbackPortAvailable {
+    param([int]$Port)
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    try {
+        $listener.Start()
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+$existingContainer = $null
+$inspection = docker inspect automated-video-workbench-control-plane-1 2>$null
+if ($LASTEXITCODE -eq 0 -and $inspection) {
+    $existingContainer = $inspection | ConvertFrom-Json | Select-Object -First 1
+}
+
+$existingDataMount = $existingContainer.Mounts |
+    Where-Object { $_.Destination -eq '/data' -and $_.Type -eq 'bind' } |
+    Select-Object -First 1
+if ($existingDataMount -and (Test-Path -LiteralPath $existingDataMount.Source -PathType Container)) {
+    $env:WORKBENCH_HOST_DATA_DIR = $existingDataMount.Source
+}
+else {
+    $env:WORKBENCH_HOST_DATA_DIR = Join-Path $projectRoot 'data\control-plane'
+}
+
+$workbenchPort = 8130
+$existingPort = $existingContainer.NetworkSettings.Ports.'8130/tcp' | Select-Object -First 1
+if ($existingPort -and $existingPort.HostPort -and (Test-WorkbenchHealth -Port ([int]$existingPort.HostPort))) {
+    $workbenchPort = [int]$existingPort.HostPort
+}
+elseif (-not (Test-LoopbackPortAvailable -Port $workbenchPort)) {
+    $workbenchPort++
+    while ($workbenchPort -le 8999 -and -not (Test-LoopbackPortAvailable -Port $workbenchPort)) {
+        $workbenchPort++
+    }
+    if ($workbenchPort -gt 8999) {
+        throw 'No available loopback port found between 8130 and 8999.'
+    }
+}
+$env:WORKBENCH_HOST_PORT = [string]$workbenchPort
+$workbenchUrl = "http://127.0.0.1:$workbenchPort"
+
 if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
     Copy-Item -LiteralPath $envExamplePath -Destination $envPath
 }
@@ -76,9 +135,21 @@ if ($serviceStates.Count -ne 2 -or ($serviceStates | Where-Object { $_ -ne 'heal
     throw "Services did not become healthy: $($serviceStates -join ', ')"
 }
 
+$hostDeadline = (Get-Date).AddMinutes(2)
+do {
+    if (Test-WorkbenchHealth -Port $workbenchPort) {
+        break
+    }
+    Start-Sleep -Seconds 2
+} while ((Get-Date) -lt $hostDeadline)
+if (-not (Test-WorkbenchHealth -Port $workbenchPort)) {
+    throw "Control plane is healthy inside Docker but unavailable at $workbenchUrl."
+}
+
 [pscustomobject]@{
     ArcReel = 'http://127.0.0.1:1241'
-    Workbench = 'http://127.0.0.1:8130'
-    ControlPlaneDocs = 'http://127.0.0.1:8130/docs'
+    Workbench = $workbenchUrl
+    ControlPlaneDocs = "$workbenchUrl/docs"
+    DataDirectory = $env:WORKBENCH_HOST_DATA_DIR
     DingTalkEnabled = [bool]$EnableDingTalk
 } | Format-List

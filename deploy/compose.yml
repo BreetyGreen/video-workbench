@@ -34,7 +34,7 @@ services:
       context: ../services/control-plane
       dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:8130:8130"
+      - "127.0.0.1:${WORKBENCH_HOST_PORT:-8130}:8130"
     env_file:
       - path: ../.env
         required: false
@@ -48,7 +48,9 @@ services:
       VIDEO_WORKBENCH_DINGTALK_CLIENT_ID: ${DINGTALK_CLIENT_ID:-}
       VIDEO_WORKBENCH_DINGTALK_CLIENT_SECRET: ${DINGTALK_CLIENT_SECRET:-}
     volumes:
-      - ../data/control-plane:/data
+      - type: bind
+        source: ${WORKBENCH_HOST_DATA_DIR:-../data/control-plane}
+        target: /data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8130/health"]
