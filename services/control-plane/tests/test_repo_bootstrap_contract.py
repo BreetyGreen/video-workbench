@@ -44,6 +44,7 @@ def test_repository_has_windows_native_contract_ci():
     assert "scripts/verify-fresh-clone.py --dry-run" in text
     assert "test_doctor_cli.py" in text
     assert "Parser]::ParseFile" in text
+    assert "${path}:" in text
 
 
 def test_fresh_clone_verifier_stops_the_service_process_tree():

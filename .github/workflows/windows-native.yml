@@ -36,5 +36,5 @@ jobs:
           $errors = $null
           foreach ($path in @('scripts/bootstrap.ps1', 'scripts/start.ps1', 'scripts/verify.ps1')) {
             [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors) | Out-Null
-            if ($errors.Count) { throw "PowerShell parse failed for $path: $errors" }
+            if ($errors.Count) { throw "PowerShell parse failed for ${path}: $errors" }
           }
