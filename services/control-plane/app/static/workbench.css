@@ -11,6 +11,30 @@
   padding: 0 var(--page-gutter) 4rem;
 }
 
+.first-run-guide {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  padding: clamp(1.25rem, 4vw, 2rem);
+  box-shadow: 0 1.5rem 4rem oklch(0.18 0.02 282 / 0.24);
+}
+.first-run-guide::backdrop { background: oklch(0.18 0.02 282 / 0.48); backdrop-filter: blur(4px); }
+.first-run-guide h2 { margin: 0.45rem 0 0.6rem; font-size: var(--step-3); }
+.first-run-guide > p { margin: 0; color: var(--color-ink-muted); line-height: 1.65; }
+.first-run-guide > small { display: block; margin-top: 0.85rem; color: var(--color-ink-muted); text-align: center; }
+.first-run-kicker { color: var(--color-accent-strong); font-size: 0.6875rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.first-run-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+.first-run-option { display: grid; gap: 0.4rem; min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); padding: 1rem; }
+.first-run-option.recommended { border-color: oklch(0.72 0.12 282); background: var(--color-accent-soft); }
+.first-run-option span { color: var(--color-accent-strong); font-size: 0.6875rem; font-weight: 800; }
+.first-run-option strong { font-size: var(--step-1); }
+.first-run-option p { margin: 0; color: var(--color-ink-muted); font-size: var(--step--1); line-height: 1.55; }
+.first-run-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+
 .page-head {
   display: flex;
   min-height: 7.25rem;
@@ -186,6 +210,7 @@ td { font-size: var(--step--1); }
 }
 
 @media (max-width: 680px) {
+  .first-run-options, .first-run-actions { grid-template-columns: 1fr; }
   .workspace { padding-inline: 0.75rem; }
   .page-head { align-items: flex-start; flex-direction: column; gap: 0.8rem; padding: 1.25rem 0; }
   .page-head h1 { font-size: var(--step-3); }

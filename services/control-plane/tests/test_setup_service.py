@@ -45,6 +45,29 @@ def test_fresh_setup_keeps_external_providers_optional(tmp_path: Path):
     assert result["progress"]["local_ready"] is True
     assert result["progress"]["configured_optional"] == 0
 
+    capabilities = result["capabilities"]
+    assert len(capabilities) == 15
+    assert len({item["id"] for item in capabilities}) == 15
+    assert {item["tier"] for item in capabilities} == {
+        "local_no_key",
+        "optional_key",
+        "external_authorization",
+    }
+    assert len([item for item in capabilities if item["tier"] == "local_no_key"]) >= 5
+    assert all(item["fallback"] for item in capabilities)
+    assert all(item["docs_url"].startswith("/docs/") for item in capabilities)
+    local_editing = next(item for item in capabilities if item["id"] == "local_editing")
+    assert local_editing["requires"] == []
+    assert "Key" not in "".join(local_editing["requires"])
+
+    repository_root = Path(__file__).parents[3]
+    human_guide = (repository_root / "docs" / "capabilities-and-configuration.md").read_text(encoding="utf-8")
+    codex_guide = (repository_root / "docs" / "codex-operator-guide.md").read_text(encoding="utf-8")
+    for capability in capabilities:
+        assert f"`{capability['id']}`" in codex_guide
+        anchor = capability["docs_url"].rsplit("#", 1)[-1]
+        assert anchor in human_guide
+
 
 def test_preferences_round_trip_without_secrets(tmp_path: Path):
     service = SetupService(tmp_path)
@@ -82,7 +105,7 @@ def test_setup_status_maps_existing_integrations_without_exposing_values(tmp_pat
 
     cards = {card["id"]: card for card in result["providers"]}
     assert cards["volcengine"]["status"] == "configured"
-    assert cards["materials"]["status"] == "configured"
+    assert cards["materials"]["status"] == "not_configured"
     assert cards["materials"]["detail"] == "本地已有 3 条授权素材；公共素材接口尚未连接。"
     assert cards["douyin"]["status"] == "oauth_required"
     assert cards["dingtalk"]["status"] == "not_configured"

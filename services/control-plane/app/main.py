@@ -11,7 +11,7 @@ import shutil
 from typing import Callable
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session
@@ -310,13 +310,24 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     def workbench(request: Request):
-        if not setup_service.preferences()["local_mode_confirmed"]:
-            return RedirectResponse(url="/setup", status_code=307)
-        return templates.TemplateResponse(request, "workbench.html", {})
+        first_run = not setup_service.preferences()["local_mode_confirmed"]
+        return templates.TemplateResponse(
+            request,
+            "workbench.html",
+            {"show_onboarding": first_run},
+        )
 
     @app.get("/setup", response_class=HTMLResponse)
     def setup_page(request: Request):
         return templates.TemplateResponse(request, "setup.html", {})
+
+    @app.get("/docs/capabilities-and-configuration", response_class=HTMLResponse)
+    def capability_guide(request: Request):
+        return templates.TemplateResponse(
+            request,
+            "capabilities.html",
+            {"capabilities": setup_service.capabilities.list()},
+        )
 
     @app.get("/api/local-runtime")
     def local_runtime_status():

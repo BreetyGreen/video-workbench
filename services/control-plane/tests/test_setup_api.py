@@ -20,11 +20,13 @@ def client(tmp_path: Path):
         yield test_client
 
 
-def test_fresh_home_redirects_to_setup(client: TestClient):
+def test_fresh_home_opens_workbench_with_optional_setup_guide(client: TestClient):
     response = client.get("/", follow_redirects=False)
 
-    assert response.status_code == 307
-    assert response.headers["location"] == "/setup"
+    assert response.status_code == 200
+    assert 'data-first-run="true"' in response.text
+    assert "打开配置助手" in response.text
+    assert "先直接创作" in response.text
 
 
 def test_confirmed_local_mode_opens_workbench(client: TestClient):
@@ -45,6 +47,12 @@ def test_setup_status_never_returns_credentials(client: TestClient):
     assert payload["first_run"] is True
     assert payload["local_mode"]["ready"] is True
     assert len(payload["providers"]) == 4
+    assert {item["id"] for item in payload["capabilities"]} >= {
+        "local_editing",
+        "volcano_asr",
+        "dify",
+        "douyin_publish",
+    }
     lowered = response.text.lower()
     assert "client_secret" not in lowered
     assert "access_token" not in lowered

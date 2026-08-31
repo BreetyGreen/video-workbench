@@ -9,6 +9,12 @@ const stateLabels = {
   unreachable: "暂时无法连接",
 };
 
+const tierLabels = {
+  local_no_key: "无需 Key",
+  optional_key: "可选增强",
+  external_authorization: "需要外部授权",
+};
+
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
@@ -92,6 +98,40 @@ function renderProviders(status) {
   });
 }
 
+function capabilityMarkup(capability) {
+  const requirements = capability.requires?.length
+    ? capability.requires.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+    : "<li>无需账号或云端凭据</li>";
+  return `
+    <article class="capability-item">
+      <div class="provider-top">
+        <h3>${escapeHtml(capability.name)}</h3>
+        <span class="capability-tier ${escapeHtml(capability.tier)}">${escapeHtml(tierLabels[capability.tier] || "待确认")}</span>
+      </div>
+      <p class="provider-summary">${escapeHtml(capability.summary)}</p>
+      <div class="capability-block"><strong>支持</strong><ul>${(capability.features || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>
+      <div class="capability-block"><strong>需要</strong><ul>${requirements}</ul></div>
+      <p class="provider-detail"><strong>未配置时：</strong>${escapeHtml(capability.fallback)}</p>
+      <p class="capability-boundary"><strong>数据边界：</strong>${escapeHtml(capability.data_boundary)}</p>
+    </article>
+  `;
+}
+
+function renderCapabilities(status) {
+  const capabilities = status.capabilities || [];
+  const tierOrder = ["local_no_key", "optional_key", "external_authorization"];
+  $("#setup-capability-list").innerHTML = tierOrder.map((tier) => {
+    const items = capabilities.filter((item) => item.tier === tier);
+    if (!items.length) return "";
+    return `
+      <section class="capability-group" aria-label="${escapeHtml(tierLabels[tier])}">
+        <header><span class="capability-tier ${escapeHtml(tier)}">${escapeHtml(tierLabels[tier])}</span><small>${items.length} 项</small></header>
+        <div class="capability-grid">${items.map(capabilityMarkup).join("")}</div>
+      </section>
+    `;
+  }).join("");
+}
+
 function renderSetup(status) {
   const ready = Boolean(status.local_mode?.ready);
   $("#local-ready-label").textContent = ready ? "本地环境已就绪" : "本地环境需要处理";
@@ -99,6 +139,7 @@ function renderSetup(status) {
   $("#confirm-local-mode").disabled = !ready;
   $("#finish-setup").disabled = !ready;
   renderRuntime(status);
+  renderCapabilities(status);
   renderProviders(status);
 }
 

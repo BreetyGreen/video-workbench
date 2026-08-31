@@ -39,3 +39,19 @@ def test_doctor_never_echoes_process_secrets(tmp_path: Path):
     assert result.returncode == 2
     assert "never-print-this" not in result.stdout
     assert json.loads(result.stdout)["actions"][0] == "install_ffmpeg"
+
+
+def test_doctor_reports_windows_runtime_locations(tmp_path: Path):
+    script = Path(__file__).parents[3] / "scripts" / "doctor.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--system", "Windows", "--home", str(tmp_path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["platform"]["system"] == "Windows"
+    assert payload["runtime"]["data_dir"].endswith("AppData/Local/VideoWorkbench")
+    assert payload["runtime"]["inbox_dir"].endswith("Videos/VideoWorkbench Inbox")
+    assert result.stderr == ""
