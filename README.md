@@ -87,9 +87,9 @@ Windows/Docker 首次启动会从 `.env.example` 创建未跟踪的 `.env`，并
 - 钉钉：按 `docs/runbooks/dingtalk.md` 创建 Stream 机器人，配置凭据后使用 `start.ps1 -EnableDingTalk`。
 - 抖音热点：只接抖音开放平台官方视频搜索接口；填写 Client Key、Client Secret、Device ID 并为应用申请 `aweme.dy.video_search` 能力。
 - 素材库：默认把任务中已勾选“拥有使用权”的视频去重登记到本地授权目录；可选填写 Pexels/Pixabay API Key，从官方视频搜索接口获取竖屏素材并保留作者、原页和许可链接，详见 `docs/runbooks/materials.md`。
-- 剪映：草稿 ZIP 可在未安装剪映时生成；安装后运行 `scripts/detect-jianying.ps1` 并人工打开样例，才可把兼容性状态改为已验证。
+- 剪映：启动器会检测本机客户端和草稿目录；生成完成后审核页可直接“导入剪映并打开”。`draft.zip` 只保留为故障恢复包，不再充当日常导入按钮。
 
-安装并至少打开一次剪映后，可把审核页对应草稿安全导入本机草稿目录。脚本会优先识别本机 B 盘的 `B:\JianyingData\Drafts\JianyingPro Drafts`，也可显式传入其他目录：
+安装并至少打开一次剪映后，正常情况下只需点击审核页的“导入剪映并打开”。启动器会优先识别本机 B 盘的 `B:\JianyingData\Drafts\JianyingPro Drafts`，并把草稿安全写入后唤起客户端。命令行导入脚本仅作为恢复手段：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\import-jianying-draft.ps1 -TaskId <任务 UUID>

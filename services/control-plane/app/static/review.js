@@ -52,3 +52,27 @@ if (deliverButton) {
     }
   });
 }
+
+const jianyingButton = document.querySelector("#jianying-handoff");
+if (jianyingButton) {
+  jianyingButton.addEventListener("click", async () => {
+    const result = document.querySelector("#jianying-result");
+    jianyingButton.disabled = true;
+    result.textContent = "正在安全导入草稿并唤起剪映…";
+    try {
+      const response = await fetch(jianyingButton.dataset.endpoint, {method: "POST"});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail?.code || "jianying_handoff_failed");
+      if (payload.status === "waiting") {
+        result.textContent = "尚未检测到可写的剪映草稿目录，请保持本机启动器运行。";
+      } else {
+        result.textContent = payload.idempotent ? "草稿已存在，正在打开剪映。" : "草稿已导入，正在打开剪映。";
+        jianyingButton.textContent = "再次打开剪映";
+      }
+    } catch (error) {
+      result.textContent = `导入失败：${error.message}`;
+    } finally {
+      jianyingButton.disabled = false;
+    }
+  });
+}

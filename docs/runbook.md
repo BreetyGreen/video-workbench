@@ -104,7 +104,7 @@ docker logs --tail 200 automated-video-workbench-arcreel-1
 
 ## 导入本机剪映草稿箱
 
-先安装并打开一次剪映，再运行：
+先安装并打开一次剪映。正常流程直接在审核页点击“导入剪映并打开”；启动器会检测应用和草稿目录、写入本机运行清单，并在安全导入后唤起客户端。以下命令仅用于诊断或恢复：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\detect-jianying.ps1

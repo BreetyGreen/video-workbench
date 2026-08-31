@@ -51,6 +51,18 @@ else {
     $env:WORKBENCH_HOST_DATA_DIR = Join-Path $projectRoot 'data\control-plane'
 }
 
+$jianyingDraftCandidates = @(
+    'B:\JianyingData\Drafts\JianyingPro Drafts',
+    (Join-Path $env:LOCALAPPDATA 'JianyingPro\User Data\Projects\com.lveditor.draft'),
+    (Join-Path $env:LOCALAPPDATA 'CapCut\User Data\Projects\com.lveditor.draft')
+)
+$jianyingDraftRoot = $jianyingDraftCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -First 1
+if ([string]::IsNullOrWhiteSpace($jianyingDraftRoot)) {
+    $jianyingDraftRoot = Join-Path $env:WORKBENCH_HOST_DATA_DIR 'jianying-drafts'
+    New-Item -ItemType Directory -Path $jianyingDraftRoot -Force | Out-Null
+}
+$env:WORKBENCH_HOST_JIANYING_DRAFT_DIR = [System.IO.Path]::GetFullPath($jianyingDraftRoot)
+
 $workbenchPort = 8130
 $existingPort = $existingContainer.NetworkSettings.Ports.'8130/tcp' | Select-Object -First 1
 if ($existingPort -and $existingPort.HostPort -and (Test-WorkbenchHealth -Port ([int]$existingPort.HostPort))) {
@@ -146,10 +158,20 @@ if (-not (Test-WorkbenchHealth -Port $workbenchPort)) {
     throw "Control plane is healthy inside Docker but unavailable at $workbenchUrl."
 }
 
+$pythonCommand = Get-Command pythonw.exe -ErrorAction SilentlyContinue
+if (-not $pythonCommand) { $pythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue }
+if (-not $pythonCommand) { $pythonCommand = Get-Command python -ErrorAction SilentlyContinue }
+if ($pythonCommand) {
+    $helperScript = Join-Path $projectRoot 'scripts\jianying-host-helper.py'
+    $helperArgumentLine = '"' + $helperScript + '" --data-dir "' + $env:WORKBENCH_HOST_DATA_DIR + '" --container-draft-root /jianying-drafts --fallback-draft-root "' + $env:WORKBENCH_HOST_JIANYING_DRAFT_DIR + '" --watch'
+    Start-Process -FilePath $pythonCommand.Source -ArgumentList $helperArgumentLine -WindowStyle Hidden | Out-Null
+}
+
 [pscustomobject]@{
     ArcReel = 'http://127.0.0.1:1241'
     Workbench = $workbenchUrl
     ControlPlaneDocs = "$workbenchUrl/docs"
     DataDirectory = $env:WORKBENCH_HOST_DATA_DIR
+    JianyingDraftDirectory = $env:WORKBENCH_HOST_JIANYING_DRAFT_DIR
     DingTalkEnabled = [bool]$EnableDingTalk
 } | Format-List

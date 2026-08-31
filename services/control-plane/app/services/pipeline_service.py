@@ -193,7 +193,7 @@ class PipelineService:
     def _narration_text(task: VideoTask, *, target_seconds: float = 22.0) -> str:
         title = task.title.strip() or "萌宠日常"
         category = task.content_type.strip() or "宠物"
-        brief = f"{category} {task.requirements_text} {task.tutorial_text}".lower()
+        brief = f"{title} {category} {task.requirements_text} {task.tutorial_text}".lower()
         budget = min(105, max(9, round(max(1.0, target_seconds) * 4.7)))
 
         def fit(parts: list[str]) -> str:
@@ -214,6 +214,15 @@ class PipelineService:
             return "".join(chosen) or parts[0][: budget - 1].rstrip("，。！？；、 ") + "。"
 
         if any(keyword in brief for keyword in ("商品", "产品", "带货", "卖点", "介绍")):
+            if any(keyword in brief for keyword in ("帽", "hat", "头饰")):
+                return fit(
+                    [
+                        "一顶帽子能不能显脸小，先看三个真实场景的上身效果。",
+                        "柔和帽檐自然修饰脸型，日常遮阳也不压造型。",
+                        "轻量好收纳，通勤、旅行和周末出门都容易搭配。",
+                        "选适合自己的颜色和帽围，戴上就能轻松完成整套穿搭。",
+                    ]
+                )
             return fit(
                 [
                     "沙发不再粘毛？先看这把宠物除毛梳怎么用。",
@@ -239,7 +248,7 @@ class PipelineService:
             return voiceover, 1.0
         desired_seconds = max(
             0.3,
-            target_seconds * (0.92 if voiceover.duration_seconds < lower_bound else 0.98),
+            target_seconds * (0.95 if voiceover.duration_seconds < lower_bound else 0.98),
         )
         speed_factor = voiceover.duration_seconds / desired_seconds
         factors: list[float] = []

@@ -243,3 +243,33 @@ class ProviderSettingsService:
                         continue
                 setattr(settings, field.setting, value)
         self._dirty.clear()
+
+    def import_legacy_settings(self, session: Session, settings: Settings) -> None:
+        """One-time import of pre-settings-page env values into encrypted storage."""
+        if not settings.volcano_tts_api_key and settings.volcano_asr_api_key:
+            # Older releases intentionally reused the speech-service API key
+            # for both BigASR and TTS. Preserve that proven local behavior and
+            # make it visible in the new settings center.
+            settings.volcano_tts_api_key = settings.volcano_asr_api_key
+        triggers = {
+            "volcano_asr": ("api_key", "app_key", "access_key"),
+            "volcano_tts": ("api_key",),
+            "dify": ("tutorial_api_key", "viral_api_key"),
+            "pexels": ("api_key",),
+            "pixabay": ("api_key",),
+            "seedance": ("api_key",),
+            "douyin": ("client_key", "client_secret", "access_token"),
+            "dingtalk": ("client_id", "client_secret"),
+        }
+        for definition in PROVIDERS:
+            if session.get(ProviderCredential, definition.provider_id) is not None:
+                continue
+            values = {
+                field.name: str(getattr(settings, field.setting)).strip()
+                for field in definition.fields
+                if str(getattr(settings, field.setting)).strip() not in {"", "0"}
+            }
+            if not any(values.get(name) for name in triggers[definition.provider_id]):
+                continue
+            self.save(session, definition.provider_id, values=values)
+        self._dirty.clear()

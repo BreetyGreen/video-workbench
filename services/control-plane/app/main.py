@@ -28,7 +28,6 @@ from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
 from app.models import LicensedAsset, TaskStatus
-from app.platforms.jianying import discover_jianying
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -82,6 +81,8 @@ from app.services.usage_service import UsageService
 from app.services.voice_catalog_service import VoiceCatalogService
 from app.services.setup_service import SetupService
 from app.services.provider_settings_service import ProviderSettingsService
+from app.services.jianying_runtime_service import JianyingRuntimeService
+from app.services.jianying_handoff_service import JianyingHandoffService
 logger = logging.getLogger(__name__)
 
 
@@ -106,6 +107,7 @@ def create_app(
         usage_key = key_path.read_text(encoding="utf-8").strip()
     provider_settings = ProviderSettingsService(usage_key)
     with Session(database.engine) as provider_session:
+        provider_settings.import_legacy_settings(provider_session, app_settings)
         provider_settings.apply(provider_session, app_settings)
     review_service = ReviewService(app_settings.artifact_dir)
     analysis_client = dify_client or DifyClient(app_settings)
@@ -166,6 +168,12 @@ def create_app(
     voice_catalog = VoiceCatalogService(speech_client.voice_type)
     voice_usage = UsageService()
     setup_service = SetupService(app_settings.data_dir)
+    jianying_runtime = JianyingRuntimeService(app_settings.data_dir)
+    jianying_handoff = JianyingHandoffService(
+        app_settings.data_dir,
+        app_settings.artifact_dir,
+        jianying_runtime,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -199,10 +207,10 @@ def create_app(
     def local_runtime_snapshot() -> dict:
         system = host_platform.system()
         runtime_paths = resolve_runtime_paths(system=system, home=Path.home())
-        location = discover_jianying(home=Path.home(), system=system)
+        jianying = jianying_runtime.snapshot()
         return {
-            "platform": system,
-            "architecture": host_platform.machine(),
+            "platform": jianying.get("platform") or system,
+            "architecture": jianying.get("architecture") or host_platform.machine(),
             "runtime": {
                 "data_dir": str(app_settings.data_dir),
                 "inbox_dir": str(runtime_paths.inbox_dir),
@@ -211,12 +219,7 @@ def create_app(
                 "ffmpeg": shutil.which(app_settings.ffmpeg_bin) is not None,
                 "ffprobe": shutil.which(app_settings.ffprobe_bin) is not None,
             },
-            "jianying": {
-                "installed": location.installed,
-                "app_path": str(location.app_path) if location.app_path else None,
-                "draft_root": str(location.draft_root) if location.draft_root else None,
-                "needs_folder_picker": location.needs_folder_picker,
-            },
+            "jianying": jianying,
         }
 
     def material_status_snapshot(session: Session) -> dict:
@@ -918,7 +921,32 @@ def create_app(
                 status_code=500,
                 detail={"code": "processing_failed", "message": str(error)},
             ) from error
+        try:
+            jianying_handoff.import_task(task_id)
+        except Exception:
+            logger.exception("Automatic Jianying handoff failed for task %s", task_id)
         return TaskRead.model_validate(processed)
+
+    @app.get("/api/tasks/{task_id}/handoff/jianying")
+    def read_jianying_handoff(
+        task_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> dict[str, object]:
+        if get_task(session, task_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "task_not_found"})
+        return jianying_handoff.status(task_id)
+
+    @app.post("/api/tasks/{task_id}/handoff/jianying")
+    def import_jianying_handoff(
+        task_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> dict[str, object]:
+        if get_task(session, task_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "task_not_found"})
+        result = jianying_handoff.import_task(task_id)
+        if result.get("status") == "failed":
+            raise HTTPException(status_code=409, detail=result)
+        return result
 
     @app.post("/api/tasks/{task_id}/review", response_model=TaskRead)
     def review_task(
@@ -1068,6 +1096,7 @@ def create_app(
                 "narration_coverage": narration_coverage,
                 "subtitle_coverage": narration_coverage if audio_route.get("voiceover_used") else None,
                 "review_issues": review_issues,
+                "jianying_handoff": jianying_handoff.status(task_id),
             },
         )
 

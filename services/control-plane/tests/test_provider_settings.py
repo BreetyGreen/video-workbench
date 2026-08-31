@@ -112,3 +112,23 @@ def test_provider_settings_page_is_linked_from_setup_and_capability_guide(tmp_pa
         guide = client.get("/docs/capabilities-and-configuration")
         assert 'href="/settings/providers"' in setup.text
         assert 'href="/settings/providers"' in guide.text
+
+
+def test_existing_env_configuration_is_imported_into_encrypted_store(tmp_path: Path):
+    settings = settings_for(tmp_path)
+    settings.volcano_asr_api_key = "existing-asr-secret"
+    settings.dify_base_url = "http://127.0.0.1:5501/v1"
+    settings.dify_tutorial_api_key = "existing-dify-secret"
+
+    with TestClient(create_app(settings)) as client:
+        status = client.get("/api/provider-settings")
+
+        assert status.status_code == 200
+        providers = {item["id"]: item for item in status.json()["providers"]}
+        assert providers["volcano_asr"]["configured"] is True
+        assert providers["volcano_tts"]["configured"] is True
+        assert providers["dify"]["configured"] is True
+        assert "existing-asr-secret" not in status.text
+        with Session(client.app.state.database.engine) as session:
+            assert session.get(ProviderCredential, "volcano_asr") is not None
+            assert session.get(ProviderCredential, "dify") is not None

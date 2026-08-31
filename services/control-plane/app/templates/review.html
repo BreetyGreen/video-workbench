@@ -45,7 +45,7 @@
             <div><dt>质量门禁</dt><dd class="quality-{{ quality_report.get('status', 'unknown') }}">{{ quality_report.get('status', 'unknown') }}</dd></div>
           </dl>
           <p class="inspector-note">{{ audio_route.get('reason', audio_route.get('decision_reason', '尚未记录音频路由原因')) }}</p>
-          {% if has_draft %}<a class="draft-action" href="/api/tasks/{{ task.id }}/artifacts/draft.zip">在剪映中导入草稿</a>{% endif %}
+          {% if has_draft %}<button class="draft-action" id="jianying-handoff" type="button" data-endpoint="/api/tasks/{{ task.id }}/handoff/jianying">{% if jianying_handoff.get('status') == 'imported' %}打开剪映{% else %}导入剪映并打开{% endif %}</button><p class="inspector-note" id="jianying-result">{% if jianying_handoff.get('status') == 'imported' %}草稿已安全导入本机目录{% elif jianying_handoff.get('status') == 'waiting' %}等待本机启动器检测剪映{% endif %}</p>{% endif %}
         </aside>
       </section>
 

@@ -197,7 +197,9 @@ def test_review_page_displays_video_copy_evidence_and_warnings(client: TestClien
     assert "字幕覆盖" in response.text
     assert ">100%<" in response.text
     assert 'data-timeline-start="' in response.text
-    assert "在剪映中导入草稿" in response.text
+    assert "导入剪映并打开" in response.text
+    assert f'/api/tasks/{task["id"]}/handoff/jianying' in response.text
+    assert 'class="draft-action" href=' not in response.text
     assert "抖音官方交付" in response.text
     assert "仅自己可见" in response.text
     assert "/static/review.js" in response.text

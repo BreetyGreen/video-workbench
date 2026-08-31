@@ -49,6 +49,22 @@ def test_product_narration_uses_content_type_and_fits_the_actual_timeline():
     assert "做一个25秒" not in narration
 
 
+def test_hat_product_narration_never_falls_back_to_pet_brush_copy():
+    task = SimpleNamespace(
+        title="轻量遮阳帽｜三场景真实素材商品介绍",
+        content_type="商品介绍",
+        requirements_text="突出修饰脸型、遮阳、轻便易搭",
+        tutorial_text="前三秒上身钩子",
+    )
+
+    narration = PipelineService._narration_text(task, target_seconds=24)
+
+    assert "帽" in narration
+    assert "遮阳" in narration
+    assert "除毛梳" not in narration
+    assert "宠物" not in narration
+
+
 def test_general_narration_fills_a_short_form_timeline_without_date_padding():
     task = SimpleNamespace(
         title="萌宠治愈瞬间",

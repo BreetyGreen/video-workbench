@@ -26,6 +26,10 @@ fi
 
 mkdir -p "$DATA_DIR" "$INBOX_DIR" "$RUN_DIR" "$LOG_DIR"
 
+"$UV_BIN" run python "$SCRIPT_DIR/jianying-host-helper.py" \
+  --data-dir "$DATA_DIR" --container-draft-root "__host__" --watch \
+  >> "$LOG_DIR/jianying-host-helper.log" 2>&1 &
+
 if [ -f "$PID_FILE" ]; then
   EXISTING_PID=$(tr -d '[:space:]' < "$PID_FILE")
   case "$EXISTING_PID" in
