@@ -13,6 +13,36 @@
     {% set nav_active = 'workbench' %}
     {% include '_app_nav.html' %}
 
+    <dialog
+      class="first-run-guide"
+      id="first-run-guide"
+      data-first-run="{{ 'true' if show_onboarding else 'false' }}"
+      {% if show_onboarding %}open{% endif %}
+      aria-labelledby="first-run-title"
+      aria-describedby="first-run-description"
+    >
+      <div class="first-run-kicker">首次使用 · 约 1 分钟</div>
+      <h2 id="first-run-title">先选择你的使用方式</h2>
+      <p id="first-run-description">本地剪辑不需要 Key。你可以立即上传素材开始创作，也可以先连接云端语音、公共素材或平台能力。</p>
+      <div class="first-run-options">
+        <article class="first-run-option recommended">
+          <span>推荐先体验</span>
+          <strong>零配置本地剪辑</strong>
+          <p>上传授权素材后，直接完成分析、转写、剪辑、字幕、预览和剪映草稿。</p>
+        </article>
+        <article class="first-run-option">
+          <span>按需增强</span>
+          <strong>连接云端与平台</strong>
+          <p>高质量 ASR/TTS、公共素材、抖音和钉钉需要各自的凭证或账号授权。</p>
+        </article>
+      </div>
+      <div class="first-run-actions">
+        <button class="button primary" id="skip-first-run" type="button">先直接创作</button>
+        <a class="button secondary" href="/setup">打开配置助手</a>
+      </div>
+      <small>跳过不会关闭任何功能；之后可随时从侧栏“配置助手”继续。</small>
+    </dialog>
+
     <main class="app-main workspace">
       <section class="page-head">
         <div>

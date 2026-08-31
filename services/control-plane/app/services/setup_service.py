@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from app.services.capability_catalog_service import CapabilityCatalogService
+
 
 LOCAL_FEATURES = ["本地上传", "智能分析", "自动剪辑", "字幕与预览", "剪映草稿"]
 
@@ -15,6 +17,7 @@ class SetupService:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
         self.preference_path = self.data_dir / "setup-preferences.json"
+        self.capabilities = CapabilityCatalogService()
 
     def preferences(self) -> dict[str, bool]:
         try:
@@ -63,6 +66,7 @@ class SetupService:
             },
             "runtime": runtime,
             "providers": providers,
+            "capabilities": self.capabilities.list(),
             "progress": {
                 "local_ready": local_ready,
                 "configured_optional": configured_optional,
@@ -85,7 +89,7 @@ class SetupService:
         return {
             "id": "volcengine",
             "name": "火山引擎增强",
-            "summary": "使用云端高质量转写、热门讲解音色和方舟模型。",
+            "summary": "使用云端高质量转写和豆包讲解旁白；方舟模型与用量查询单独配置。",
             "required": False,
             "status": "configured" if configured else "partially_configured" if partial else "not_configured",
             "detail": "未连接时自动使用本地 Whisper 和本地剪辑。",
@@ -105,7 +109,6 @@ class SetupService:
         pexels_status = self._status(materials.get("pexels"))
         pixabay_status = self._status(materials.get("pixabay"))
         external_ready = "configured" in {pexels_status, pixabay_status}
-        local_ready = total > 0 or self._status(integrations.get("materials")) == "configured"
         if total:
             detail = f"本地已有 {total} 条授权素材；" + ("公共素材接口已连接。" if external_ready else "公共素材接口尚未连接。")
         else:
@@ -115,7 +118,7 @@ class SetupService:
             "name": "公共素材库",
             "summary": "从 Pexels 或 Pixabay 搜索有来源记录的公开视频素材。",
             "required": False,
-            "status": "configured" if external_ready or local_ready else "not_configured",
+            "status": "configured" if external_ready else "not_configured",
             "detail": detail,
             "fallback": "用户上传与本地授权素材",
             "official_url": "https://www.pexels.com/api/",

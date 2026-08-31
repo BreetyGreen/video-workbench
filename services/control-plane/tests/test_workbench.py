@@ -70,6 +70,28 @@ def test_workbench_page_and_operational_lists(tmp_path: Path):
         assert runs.json()[0]["id"] == run.json()["id"]
 
 
+def test_first_visit_guides_without_forcing_setup(tmp_path: Path):
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'first-visit.db').as_posix()}",
+        automation_enabled=False,
+    )
+    with TestClient(create_app(settings)) as client:
+        page = client.get("/", follow_redirects=False)
+
+        assert page.status_code == 200
+        assert 'id="first-run-guide"' in page.text
+        assert 'data-first-run="true"' in page.text
+        assert "本地剪辑不需要 Key" in page.text
+        assert 'href="/setup"' in page.text
+        assert 'id="skip-first-run"' in page.text
+
+        skipped = client.put("/api/setup/preferences", json={"local_mode_confirmed": True})
+        assert skipped.status_code == 200
+        revisited = client.get("/")
+        assert 'data-first-run="false"' in revisited.text
+
+
 def test_workbench_assets_are_served(tmp_path: Path):
     settings = Settings(
         data_dir=tmp_path / "data",
@@ -89,6 +111,8 @@ def test_workbench_assets_are_served(tmp_path: Path):
         assert "loadCloudUsage" in script.text
         assert "loadLocalRuntime" in script.text
         assert "loadSetupProgress" in script.text
+        assert "dismissFirstRunGuide" in script.text
+        assert 'body: JSON.stringify({ local_mode_confirmed: true })' in script.text
         assert "/api/setup/status" in script.text
         assert "updateCreationPreflight" in script.text
         assert "bindCreationControls" in script.text

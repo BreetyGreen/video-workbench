@@ -7,7 +7,7 @@
     <title>配置助手 · VideoPilot</title>
     <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
     <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
-    <link rel="stylesheet" href="/static/setup.css?v=20260821-2">
+    <link rel="stylesheet" href="/static/setup.css?v=20260831-1">
   </head>
   <body class="app-page">
     {% set nav_active = 'setup' %}
@@ -50,6 +50,25 @@
         </div>
       </section>
 
+      <section class="setup-section" aria-labelledby="capabilities-title">
+        <div class="section-copy capability-heading">
+          <div>
+            <span class="setup-kicker">能力说明</span>
+            <h2 id="capabilities-title">本地剪辑无需 Key</h2>
+            <p>先用零配置本地能力完成视频；只有需要云端质量、外部素材、平台搜索或发布时，才连接对应服务。</p>
+          </div>
+          <a class="setup-link" href="/docs/capabilities-and-configuration">阅读完整指南</a>
+        </div>
+        <div class="capability-legend" aria-label="能力分级">
+          <span class="local_no_key">无需 Key</span>
+          <span class="optional_key">可选增强</span>
+          <span class="external_authorization">需要外部授权</span>
+        </div>
+        <div class="setup-capability-list" id="setup-capability-list" aria-live="polite">
+          <div class="setup-skeleton provider"></div><div class="setup-skeleton provider"></div>
+        </div>
+      </section>
+
       <section class="setup-section" aria-labelledby="providers-title">
         <div class="section-copy provider-heading">
           <div>
@@ -73,6 +92,6 @@
     </main>
 
     <div class="setup-toast" id="setup-toast" role="status" aria-live="polite"></div>
-    <script src="/static/setup.js?v=20260821-2" defer></script>
+    <script src="/static/setup.js?v=20260831-1" defer></script>
   </body>
 </html>

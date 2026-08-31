@@ -34,6 +34,17 @@ def test_fresh_clone_verifier_exercises_setup_activation():
     assert '"setup_smoke": "passed"' in text
     assert "_prepare_smoke_tool_path" in text
     assert '"smoke-bin"' in text
+    assert '("Darwin", "Windows")' in text
+
+
+def test_repository_has_windows_native_contract_ci():
+    text = (ROOT / ".github" / "workflows" / "windows-native.yml").read_text(encoding="utf-8")
+
+    assert "windows-latest" in text
+    assert "scripts/verify-fresh-clone.py --dry-run" in text
+    assert "test_doctor_cli.py" in text
+    assert "Parser]::ParseFile" in text
+    assert "${path}:" in text
 
 
 def test_fresh_clone_verifier_stops_the_service_process_tree():

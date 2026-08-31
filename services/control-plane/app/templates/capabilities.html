@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>剪辑能力与配置完整指南 · VideoPilot</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/setup.css?v=20260831-1">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'setup' %}
+    {% include '_app_nav.html' %}
+
+    <main class="app-main setup-shell">
+      <header class="setup-head">
+        <div>
+          <span class="setup-kicker">能力指南</span>
+          <h1>剪辑能力与配置完整指南</h1>
+          <p>本地剪辑不需要 Key。先使用本地能力；只有需要云端质量、外部素材、平台搜索或发布时，才连接对应服务。</p>
+        </div>
+        <a class="setup-link" href="/setup">返回配置助手</a>
+      </header>
+
+      <section class="local-ready capability-guide-hero" aria-labelledby="guide-local-title">
+        <div class="local-ready-copy">
+          <span class="status-label">零配置本地基线</span>
+          <h2 id="guide-local-title">clone 后即可完成真实剪辑</h2>
+          <p>上传授权视频后，本机可完成分析、Whisper 转写、自动选镜头、9:16 排版、字幕、音频路由、渲染、质量门禁和剪映草稿。</p>
+        </div>
+        <a class="setup-button primary guide-button" href="/">开始创作</a>
+      </section>
+
+      <section class="setup-section" aria-labelledby="guide-matrix-title">
+        <div class="section-copy">
+          <h2 id="guide-matrix-title">能力矩阵</h2>
+          <p>每项都标明支持内容、所需配置、未配置时行为和数据边界。完整运行说明同时保存在仓库 `docs/capabilities-and-configuration.md`。</p>
+        </div>
+        <div class="setup-capability-list capability-guide-list">
+          {% for tier, label in [('local_no_key', '无需 Key'), ('optional_key', '可选增强'), ('external_authorization', '需要外部授权')] %}
+          <section class="capability-group" aria-label="{{ label }}">
+            <header><span class="capability-tier {{ tier }}">{{ label }}</span></header>
+            <div class="capability-grid">
+              {% for capability in capabilities if capability.tier == tier %}
+              <article class="capability-item" id="{{ capability.id | replace('_', '-') }}">
+                <div class="provider-top">
+                  <h3>{{ capability.name }}</h3>
+                  <span class="capability-tier {{ tier }}">{{ label }}</span>
+                </div>
+                <p class="provider-summary">{{ capability.summary }}</p>
+                <div class="capability-block">
+                  <strong>支持</strong>
+                  <ul>{% for feature in capability.features %}<li>{{ feature }}</li>{% endfor %}</ul>
+                </div>
+                <div class="capability-block">
+                  <strong>需要</strong>
+                  <ul>
+                    {% if capability.requires %}
+                      {% for requirement in capability.requires %}<li>{{ requirement }}</li>{% endfor %}
+                    {% else %}
+                      <li>无需账号或云端凭据</li>
+                    {% endif %}
+                  </ul>
+                </div>
+                <p class="provider-detail"><strong>未配置时：</strong>{{ capability.fallback }}</p>
+                <p class="capability-boundary"><strong>数据边界：</strong>{{ capability.data_boundary }}</p>
+              </article>
+              {% endfor %}
+            </div>
+          </section>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

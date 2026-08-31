@@ -4,6 +4,8 @@
 
 这个项目首先面向 Apple Silicon Mac。把仓库交给 Codex 后，它会读取 `AGENTS.md`，自动检查依赖、创建本地目录、发现剪映并启动工作台；本地基线不需要填写 .env，也不要求 Docker。
 
+> **最重要的结论：剪辑本身不需要 Key。** 本地上传、视频理解、自动选镜头、9:16 排版、字幕、预览、质量门禁和剪映草稿都能零 Key 运行。Key 只用于云端质量增强、外部素材、热点/发布、钉钉入口和官方用量查询。
+
 ```bash
 git clone https://github.com/BreetyGreen/video-workbench.git
 cd video-workbench
@@ -12,17 +14,25 @@ bash scripts/bootstrap.sh
 
 如果你使用 Codex，只需要在克隆后的目录里说“按照 AGENTS.md 启动项目”。脚本会把运行数据放在 `~/Library/Application Support/VideoWorkbench`，把待导入素材放在 `~/Movies/VideoWorkbench Inbox`，仓库本身保持可删除、可重新克隆。
 
-启动后浏览器首先进入 <http://127.0.0.1:8130/setup>。配置助手会自动检查 FFmpeg、本地目录和剪映位置；点击“使用本地模式进入工作台”即可开始，不需要先申请任何云服务。
+启动后浏览器进入 <http://127.0.0.1:8130/>。首次访问会显示可跳过的使用引导：可以点“先直接创作”立即使用零 Key 本地剪辑，也可以点“打开配置助手”检查 FFmpeg、本地目录、剪映位置并按需连接云服务。配置助手地址是 <http://127.0.0.1:8130/setup>，以后也始终可以从侧栏重新打开。
 
 | 能力 | 新用户是否需要配置 | 未配置时 |
 | --- | --- | --- |
 | 上传、分析、剪辑、字幕、预览、剪映草稿 | 不需要 | 直接使用本地模式 |
 | 火山方舟、ASR/TTS、用量查询 | 按需 | 本地 Whisper、本地剪辑和本地计量 |
+| Dify 教程/爆款分析 | 按需 | 本地剪辑策略和候选文案 |
 | Pexels/Pixabay 公共素材 | 按需 | 上传自有视频或使用本地授权素材 |
 | 抖音官方热点与发布 | 需要平台审批和账号授权 | 公开热点证据与剪映本地草稿 |
 | 钉钉素材入口 | 需要组织应用授权 | 工作台直接上传 |
 
 公开仓库不会附带维护者的账号凭据。每位用户只需为自己真正使用的外部服务完成一次授权；申请入口、所需字段、本地替代方案和当前连接状态都在配置助手中展示。
+
+开始前建议先看：
+
+- [普通用户：剪辑能力与配置完整指南](docs/capabilities-and-configuration.md)
+- [Codex：启动、诊断与配置决策指南](docs/codex-operator-guide.md)
+- [只有账号本人能完成的授权清单](docs/user-required-actions.md)
+- 机器可读事实源：`services/control-plane/app/capability_catalog.json`
 
 Windows 仍保留兼容启动入口：
 
@@ -63,9 +73,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 日常操作优先使用视频生产控制台：可以上传素材和教程、配置每日关键词、立即运行流程、查看任务队列与热点证据，并进入人工审核页。ArcReel 保留为更细的视频项目与素材工作区。
 
-首页“云端余量”会展示火山引擎官方账户余额、方舟聚合用量，以及本机逐任务记录的 ASR 秒数、TTS 字符和 Dify Token。首次使用按 `docs/runbooks/cloud-usage.md` 配置专用只读 AK/SK；密钥加密保存在本地，页面只显示掩码。
+首页“云端余量”会展示火山引擎官方账户余额、方舟聚合用量，以及本机逐任务记录的 ASR 秒数、TTS 字符和 Dify Token。只有需要官方余额时才按 `docs/runbooks/cloud-usage.md` 配置专用只读 AK/SK；密钥加密保存在本地，页面只显示掩码。未配置不影响剪辑。
 
-首次启动会从 `.env.example` 创建未跟踪的 `.env`，并自动生成 ArcReel 本地密码与令牌密钥。脚本不会打印这些值。Whisper 与 OCR 模型首次使用时下载到 `data/control-plane/models/`，后续启动复用缓存。
+Windows/Docker 首次启动会从 `.env.example` 创建未跟踪的 `.env`，并自动生成 ArcReel 本地密码与令牌密钥。脚本不会打印这些值。macOS 原生脚本不会主动读取仓库 `.env`；需要可选云能力时由用户在启动进程的环境中设置对应变量。Whisper 与 OCR 模型首次使用时下载并缓存，后续启动复用。
 
 ## 可选接入
 

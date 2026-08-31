@@ -37,6 +37,39 @@ function toast(message) {
   toast.timer = window.setTimeout(() => node.classList.remove("show"), 3200);
 }
 
+async function dismissFirstRunGuide() {
+  const dialog = $("#first-run-guide");
+  const button = $("#skip-first-run");
+  if (!dialog || !button) return;
+  button.disabled = true;
+  try {
+    await api("/api/setup/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ local_mode_confirmed: true }),
+    });
+    dialog.dataset.firstRun = "false";
+    dialog.close();
+    toast("已启用本地模式，需要时可再打开配置助手");
+  } catch (error) {
+    dialog.close();
+    toast(`引导状态未保存：${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function bindFirstRunGuide() {
+  const dialog = $("#first-run-guide");
+  const button = $("#skip-first-run");
+  if (!dialog || dialog.dataset.firstRun !== "true") return;
+  if (typeof dialog.showModal === "function") {
+    if (dialog.open) dialog.close();
+    dialog.showModal();
+  }
+  button?.addEventListener("click", dismissFirstRunGuide);
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
@@ -401,4 +434,5 @@ $("#refresh-cloud-usage").addEventListener("click", async (event) => {
   }
 });
 bindCreationControls();
+bindFirstRunGuide();
 loadWorkbench();

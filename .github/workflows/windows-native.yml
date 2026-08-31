@@ -1,0 +1,40 @@
+name: Windows compatibility contract
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.5"
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: uv sync --project services/control-plane --python 3.12 --extra test --locked
+      - name: Verify Windows and repository contracts
+        env:
+          VIDEO_WORKBENCH_AUTOMATION_SCHEDULER_ENABLED: "false"
+          VIDEO_WORKBENCH_PUBLIC_TREND_WEB_ENABLED: "false"
+        run: |
+          uv run --project services/control-plane pytest `
+            services/control-plane/tests/test_runtime_paths.py `
+            services/control-plane/tests/test_doctor_cli.py `
+            services/control-plane/tests/test_repo_bootstrap_contract.py `
+            services/control-plane/tests/test_deployment_contract.py -q
+          python scripts/verify-fresh-clone.py --dry-run
+      - name: Parse PowerShell entry points
+        shell: pwsh
+        run: |
+          $errors = $null
+          foreach ($path in @('scripts/bootstrap.ps1', 'scripts/start.ps1', 'scripts/verify.ps1')) {
+            [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw "PowerShell parse failed for ${path}: $errors" }
+          }

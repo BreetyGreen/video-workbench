@@ -138,6 +138,14 @@ def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str
     )
     try:
         _wait_for_service(f"{base_url}/health", process)
+        with urlopen(f"{base_url}/", timeout=10) as response:
+            first_visit_html = response.read().decode("utf-8")
+        if (
+            response.status != 200
+            or 'id="first-run-guide"' not in first_visit_html
+            or 'data-first-run="true"' not in first_visit_html
+        ):
+            raise RuntimeError("fresh-clone workbench did not expose optional first-run guidance")
         with urlopen(f"{base_url}{SETUP_PATH}", timeout=10) as response:
             setup_html = response.read().decode("utf-8")
         if response.status != 200 or "本地模式现在就能用" not in setup_html:
@@ -154,8 +162,12 @@ def _verify_setup_smoke(clone_root: Path, fake_home: Path, environment: dict[str
             raise RuntimeError("fresh-clone local-mode confirmation was not saved")
         with urlopen(f"{base_url}/", timeout=10) as response:
             workbench_html = response.read().decode("utf-8")
-        if response.status != 200 or "今天想让观众记住什么？" not in workbench_html:
-            raise RuntimeError("fresh-clone workbench did not open after local confirmation")
+        if (
+            response.status != 200
+            or "今天想让观众记住什么？" not in workbench_html
+            or 'data-first-run="false"' not in workbench_html
+        ):
+            raise RuntimeError("fresh-clone workbench did not remember local confirmation")
     finally:
         if process.poll() is None and os.name == "nt":
             subprocess.run(
@@ -233,25 +245,33 @@ def verify_archive() -> dict[str, object]:
         fake_home.mkdir()
         environment = os.environ.copy()
         environment["VIDEO_WORKBENCH_AUTOMATION_SCHEDULER_ENABLED"] = "false"
-        doctor = subprocess.run(
-            [
-                sys.executable,
-                str(clone_root / "scripts" / "doctor.py"),
-                "--system",
-                "Darwin",
-                "--home",
-                str(fake_home),
-            ],
-            cwd=clone_root,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=60,
-            env=environment,
-        )
-        if doctor.returncode not in (0, 2) or doctor.stderr:
-            raise RuntimeError(f"doctor failed in the archive: {doctor.stderr.strip()}")
-        report = json.loads(doctor.stdout)
+        doctor_reports: dict[str, dict[str, object]] = {}
+        doctor_exit_codes: dict[str, int] = {}
+        for simulated_system in ("Darwin", "Windows"):
+            doctor = subprocess.run(
+                [
+                    sys.executable,
+                    str(clone_root / "scripts" / "doctor.py"),
+                    "--system",
+                    simulated_system,
+                    "--home",
+                    str(fake_home),
+                ],
+                cwd=clone_root,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+                env=environment,
+            )
+            if doctor.returncode not in (0, 2) or doctor.stderr:
+                raise RuntimeError(
+                    f"{simulated_system} doctor failed in the archive: {doctor.stderr.strip()}"
+                )
+            doctor_reports[simulated_system] = json.loads(doctor.stdout)
+            doctor_exit_codes[simulated_system] = doctor.returncode
+
+        report = doctor_reports["Darwin"]
 
         bootstrap = (clone_root / "scripts" / "bootstrap.sh").read_text(encoding="utf-8")
         runbook = (clone_root / "docs" / "runbooks" / "macos-local.md").read_text(encoding="utf-8")
@@ -264,14 +284,20 @@ def verify_archive() -> dict[str, object]:
         if unhandled:
             raise RuntimeError(f"doctor actions have no bootstrap or runbook handler: {unhandled}")
 
+        windows_runtime = doctor_reports["Windows"].get("runtime") or {}
+        if not str(windows_runtime.get("data_dir", "")).endswith("AppData/Local/VideoWorkbench"):
+            raise RuntimeError("Windows doctor did not resolve the portable local data directory")
+
         _verify_setup_smoke(clone_root, fake_home, environment)
 
         return {
             "status": "ok",
             "archive": "tracked-files-only",
             "repository_layout": "standalone" if standalone_repository else "subdirectory",
-            "doctor_exit": doctor.returncode,
+            "doctor_exit": doctor_exit_codes["Darwin"],
             "doctor_actions": report["actions"],
+            "windows_doctor_exit": doctor_exit_codes["Windows"],
+            "windows_doctor_actions": doctor_reports["Windows"]["actions"],
             "setup_smoke": "passed",
             "real_home_modified": False,
         }
