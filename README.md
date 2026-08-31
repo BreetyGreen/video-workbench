@@ -77,6 +77,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 Windows/Docker 首次启动会从 `.env.example` 创建未跟踪的 `.env`，并自动生成 ArcReel 本地密码与令牌密钥。脚本不会打印这些值。macOS 原生脚本不会主动读取仓库 `.env`；需要可选云能力时由用户在启动进程的环境中设置对应变量。Whisper 与 OCR 模型首次使用时下载并缓存，后续启动复用。
 
+如果 Windows/Hyper-V 把 `8130` 放进系统保留端口段，启动器会从 `8130` 起自动选择下一个可用的本机端口，并在启动结果中显示实际地址。检测到旧容器时会继续使用它原来的任务数据目录，不会因为仓库换目录而显示成空工作台。
+
 ## 可选接入
 
 - Dify：按 `docs/runbooks/dify.md` 导入两份 DSL，并在 `.env` 填写两套应用 API Key。

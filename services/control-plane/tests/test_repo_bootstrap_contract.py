@@ -47,6 +47,18 @@ def test_repository_has_windows_native_contract_ci():
     assert "${path}:" in text
 
 
+def test_windows_start_selects_an_available_port_and_preserves_existing_data_mount():
+    compose = (ROOT / "deploy" / "compose.yml").read_text(encoding="utf-8")
+    start = (ROOT / "scripts" / "start.ps1").read_text(encoding="utf-8")
+
+    assert "${WORKBENCH_HOST_PORT:-8130}:8130" in compose
+    assert "${WORKBENCH_HOST_DATA_DIR:-../data/control-plane}" in compose
+    assert "TcpListener" in start
+    assert "$env:WORKBENCH_HOST_PORT" in start
+    assert "$env:WORKBENCH_HOST_DATA_DIR" in start
+    assert "http://127.0.0.1:$Port/health" in start
+
+
 def test_fresh_clone_verifier_stops_the_service_process_tree():
     text = (ROOT / "scripts" / "verify-fresh-clone.py").read_text(encoding="utf-8")
 
