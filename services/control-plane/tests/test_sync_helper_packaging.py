@@ -15,7 +15,10 @@ def test_sync_helper_has_pinned_cross_platform_build_and_install_contracts() -> 
     macos_build = (root / "sync-helper" / "build.sh").read_text()
 
     assert requirements.strip() == "pyinstaller==6.22.2"
-    assert "Test-Path -LiteralPath 'B:\\'" in windows
+    assert "Test-Path -LiteralPath 'B:\\'" not in windows
+    assert "$preferredRoot = $env:LOCALAPPDATA" in windows
+    assert "[string]$InstallDir = ''" in windows
+    assert "[string]$DataDir = ''" in windows
     assert "$env:LOCALAPPDATA" in windows
     assert "Register-ScheduledTask" in windows
     assert "-RestartCount 5" in windows

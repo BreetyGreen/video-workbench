@@ -4,7 +4,8 @@ param(
     [string]$DataDir = ''
 )
 $ErrorActionPreference = 'Stop'
-$preferredRoot = if (Test-Path -LiteralPath 'B:\' -PathType Container) { 'B:\' } else { $env:LOCALAPPDATA }
+$preferredRoot = $env:LOCALAPPDATA
+if ([string]::IsNullOrWhiteSpace($preferredRoot)) { throw 'LOCALAPPDATA is unavailable for the current Windows user.' }
 if ([string]::IsNullOrWhiteSpace($InstallDir)) { $InstallDir = Join-Path $preferredRoot 'Apps\VideoWorkbenchSync' }
 if ([string]::IsNullOrWhiteSpace($DataDir)) { $DataDir = Join-Path $preferredRoot 'VideoWorkbench\Sync' }
 $source = Join-Path $PSScriptRoot 'VideoWorkbenchSync.exe'

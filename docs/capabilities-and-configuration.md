@@ -249,6 +249,8 @@ python scripts/sync-jianying-device.py \
 
 当前仓库已经完成原子单次配对、令牌哈希存储、作业到设备的原子认领与隔离、下载、导入、剪映启动、幂等结果回报、退避重试、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
 
+Windows 安装脚本默认写入当前用户的 `%LOCALAPPDATA%`。它不会自动选择 `B:` 或其他盘符；若用户希望把程序或同步数据放在其他磁盘，可显式传入 `-InstallDir`、`-DataDir`，该选择只属于当前设备。macOS 数据仍存放在用户的 `~/Library/Application Support/VideoWorkbench`。
+
 ### remote-deployment：服务器、域名和 HTTPS
 
 本机模式不需要服务器。需要多人或跨设备访问时，才购买/分配 Linux 服务器、提供 SSH 权限、配置域名和 HTTPS。服务器上的素材、模型和凭据需要单独备份与访问控制。

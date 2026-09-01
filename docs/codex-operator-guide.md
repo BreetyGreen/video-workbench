@@ -102,6 +102,8 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 
 1. `GET /health`：服务、数据库和交付目录。
 2. `GET /api/local-runtime`：FFmpeg、FFprobe、运行目录和剪映发现。
+
+Windows 默认运行目录位于当前用户的 `%LOCALAPPDATA%\VideoWorkbench`，不会因为机器存在 `B:` 盘就自动改盘。需要使用其他磁盘时，在安装同步助手时显式传入 `-InstallDir` 和 `-DataDir`；macOS 继续使用 `~/Library/Application Support/VideoWorkbench`。
 3. `GET /api/setup/status`：静态能力清单和实时服务状态。
 4. 任务卡住时看任务状态，再看任务目录中的时间线、渲染和质量报告。
 5. 云能力失败时查看模型路由和 `fallback_reason`；不得直接断言 Key 无效。
