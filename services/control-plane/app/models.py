@@ -70,6 +70,62 @@ class CourseAsset(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class EditingRecipe(SQLModel, table=True):
+    __tablename__ = "editing_recipes"
+    __table_args__ = (UniqueConstraint("course_id", "version", name="uq_course_recipe_version"),)
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    version: int = 1
+    title: str
+    summary: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EditingRule(SQLModel, table=True):
+    __tablename__ = "editing_rules"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    category: str = Field(index=True)
+    instruction: str
+    source_asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    source_start_ms: int | None = None
+    source_end_ms: int | None = None
+    source_page: int | None = None
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class MaterialShot(SQLModel, table=True):
+    __tablename__ = "material_shots"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "start_ms", "end_ms", name="uq_material_shot_range"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    start_ms: int
+    end_ms: int
+    thumbnail_path: str = ""
+    ocr_text: str = ""
+    tags_json: str = "[]"
+    embedding_json: str = "[]"
+    phash: str = Field(default="", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CourseProcessingRun(SQLModel, table=True):
+    __tablename__ = "course_processing_runs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    state: str = Field(default="queued", index=True)
+    error_code: str = ""
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+
+
 class VideoTask(SQLModel, table=True):
     __tablename__ = "video_tasks"
 
