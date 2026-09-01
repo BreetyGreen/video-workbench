@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     dify_timeout_seconds: float = 90.0
     dingtalk_client_id: str = ""
     dingtalk_client_secret: str = ""
+    course_max_file_bytes: int = 500 * 1024 * 1024
     ffmpeg_bin: str = "ffmpeg"
     ffprobe_bin: str = "ffprobe"
     transcription_enabled: bool = True

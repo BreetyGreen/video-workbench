@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 import hashlib
+import json
 import logging
 from pathlib import Path
 import platform as host_platform
@@ -27,7 +28,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import LicensedAsset, TaskStatus
+from app.models import CourseAssetRole, LicensedAsset, RightsStatus, TaskStatus
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -50,6 +51,7 @@ from app.schemas.automation import (
 )
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
+from app.schemas.courses import CourseAssetRead, CourseRead
 from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
@@ -83,6 +85,7 @@ from app.services.setup_service import SetupService
 from app.services.provider_settings_service import ProviderSettingsService
 from app.services.jianying_runtime_service import JianyingRuntimeService
 from app.services.jianying_handoff_service import JianyingHandoffService
+from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
 logger = logging.getLogger(__name__)
 
 
@@ -174,6 +177,16 @@ def create_app(
         app_settings.artifact_dir,
         jianying_runtime,
     )
+    course_intake = CourseIntakeService(
+        app_settings.data_dir,
+        app_settings.course_max_file_bytes,
+    )
+
+    def course_read(course, assets) -> CourseRead:
+        return CourseRead(
+            **course.model_dump(),
+            assets=[CourseAssetRead.model_validate(asset) for asset in assets],
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -823,6 +836,58 @@ def create_app(
                 detail={"code": "duplicate_task", "deduplication_key": str(error)},
             ) from error
         return TaskRead.model_validate(task)
+
+    @app.post("/api/courses/intake", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
+    def post_course_intake(
+        response: Response,
+        title: str = Form(min_length=1, max_length=200),
+        source_type: str = Form(default="dingtalk", max_length=100),
+        source_user: str = Form(default="", max_length=200),
+        source_conversation: str = Form(default="", max_length=200),
+        source_message_id: str = Form(min_length=1, max_length=300),
+        asset_roles: str = Form(),
+        rights_statuses: str = Form(),
+        files: list[UploadFile] = File(min_length=1),
+        session: Session = Depends(session_dependency),
+    ) -> CourseRead:
+        try:
+            roles = [CourseAssetRole(value) for value in json.loads(asset_roles)]
+            rights = [RightsStatus(value) for value in json.loads(rights_statuses)]
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_course_asset_metadata"},
+            ) from error
+        try:
+            course, assets, created = course_intake.create_course(
+                session,
+                title=title,
+                source_type=source_type,
+                source_user=source_user,
+                source_conversation=source_conversation,
+                source_message_id=source_message_id,
+                files=files,
+                roles=roles,
+                rights_statuses=rights,
+            )
+        except CourseIntakeError as error:
+            status_code = 413 if error.code == "course_asset_too_large" else 422
+            if error.code == "unsupported_course_asset_type":
+                status_code = 415
+            raise HTTPException(status_code=status_code, detail={"code": error.code}) from error
+        if not created:
+            response.status_code = status.HTTP_200_OK
+        return course_read(course, assets)
+
+    @app.get("/api/courses/{course_id}", response_model=CourseRead)
+    def read_course(
+        course_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> CourseRead:
+        result = course_intake.get_course(session, course_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail={"code": "course_not_found"})
+        return course_read(*result)
 
     @app.get("/api/tasks", response_model=list[TaskRead])
     def read_tasks(
