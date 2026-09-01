@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from app.config import Settings
 from app.models import (
+    CourseAsset,
     LicensedAsset,
     Material,
     TaskBrief,
@@ -178,6 +179,76 @@ def create_task_from_library_assets(
         suffix = _safe_extension(asset.original_name) or source.suffix.lower() or ".mp4"
         destination = (task_dir / f"{uuid4()}{suffix}").resolve()
         if task_dir.resolve() not in destination.parents:
+            raise ValueError("task_material_destination_outside_root")
+        shutil.copy2(source, destination)
+        task.materials.append(
+            Material(
+                task_id=task.id,
+                original_name=Path(asset.original_name).name,
+                stored_path=str(destination),
+                mime_type=asset.mime_type,
+                size_bytes=destination.stat().st_size,
+                sha256=asset.sha256,
+            )
+        )
+
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    return get_task(session, task.id)  # type: ignore[return-value]
+
+
+def create_task_from_course_assets(
+    session: Session,
+    settings: Settings,
+    *,
+    title: str,
+    content_type: str,
+    assets: list[CourseAsset],
+    requirements_text: str,
+    tutorial_text: str,
+    commercial: bool,
+    quality_profile: str = "production",
+    cloud_processing_allowed: bool = False,
+    voice_preset: str = "vivi-2",
+    voice_type: str = "zh_female_vv_uranus_bigtts",
+) -> VideoTask:
+    """Create an isolated render task from course-owned, rights-checked assets."""
+    if not assets:
+        raise ValueError("course_materials_required")
+
+    task = VideoTask(
+        title=title.strip(),
+        content_type=content_type.strip(),
+        rights_confirmed=commercial,
+        source_type="course_automation",
+    )
+    task.brief = TaskBrief(
+        task_id=task.id,
+        requirements_text=requirements_text.strip(),
+        tutorial_text=tutorial_text.strip(),
+    )
+    task.production_settings = TaskProductionSettings(
+        task_id=task.id,
+        quality_profile=quality_profile,
+        cloud_processing_allowed=cloud_processing_allowed,
+    )
+    task.voice_selection = TaskVoiceSelection(
+        task_id=task.id,
+        preset_id=voice_preset,
+        voice_type=voice_type,
+    )
+
+    course_root = (settings.data_dir / "courses").resolve()
+    task_dir = (settings.material_dir / task.id).resolve()
+    task_dir.mkdir(parents=True, exist_ok=True)
+    for asset in assets:
+        source = Path(asset.stored_path).resolve()
+        if course_root not in source.parents or not source.is_file():
+            raise ValueError("course_asset_path_outside_storage")
+        suffix = _safe_extension(asset.original_name) or source.suffix.lower() or ".mp4"
+        destination = (task_dir / f"{uuid4()}{suffix}").resolve()
+        if task_dir not in destination.parents:
             raise ValueError("task_material_destination_outside_root")
         shutil.copy2(source, destination)
         task.materials.append(

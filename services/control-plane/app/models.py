@@ -126,6 +126,44 @@ class CourseProcessingRun(SQLModel, table=True):
     finished_at: datetime | None = None
 
 
+class CourseEditJob(SQLModel, table=True):
+    __tablename__ = "course_edit_jobs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    task_id: str | None = Field(default=None, foreign_key="video_tasks.id", index=True)
+    state: str = Field(default="queued", index=True)
+    commercial: bool = True
+    quality_status: str = "pending"
+    review_skipped: bool = False
+    handoff_status: str = "pending"
+    error_code: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class DeliveryDevice(SQLModel, table=True):
+    __tablename__ = "delivery_devices"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    name: str
+    token_hash: str = Field(index=True, unique=True)
+    active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_seen_at: datetime | None = None
+
+
+class DevicePairingCode(SQLModel, table=True):
+    __tablename__ = "device_pairing_codes"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    code_hash: str = Field(index=True, unique=True)
+    expires_at: datetime
+    used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class VideoTask(SQLModel, table=True):
     __tablename__ = "video_tasks"
 

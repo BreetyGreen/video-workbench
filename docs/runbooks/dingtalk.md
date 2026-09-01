@@ -1,49 +1,34 @@
-# 钉钉 Stream 课程入库
+# 钉钉课程入口运行手册
 
-## 准备
+## 当前边界
 
-钉钉连接器使用钉钉开放平台团队维护的 Python Stream SDK `dingtalk-stream 0.24.3`。Stream 模式通过长连接接收机器人消息，不需要把本机 Webhook 暴露到公网。
+钉钉是课程文件入口，不是剪辑器。真实组织接入需要企业内部应用、Stream 机器人和管理员授权；没有这些凭据时，可用 `scripts/simulate-dingtalk-course.py` 验证完全相同的课程入库接口。
 
-在钉钉开发者后台创建企业内部应用和机器人，启用 Stream 模式，然后只在本地 `.env` 配置：
+## Windows 安装与检查
 
-```text
-DINGTALK_CLIENT_ID=
-DINGTALK_CLIENT_SECRET=
-DINGTALK_ROBOT_CODE=
-CONTROL_PLANE_URL=http://127.0.0.1:8130
-DINGTALK_MAX_FILE_BYTES=524288000
-DINGTALK_DEDUP_DATABASE=data/dingtalk/dedup.db
-```
+只从钉钉官方下载页取得安装器。安装前检查 Authenticode 发布者，安装目标优先使用 `B:\DingDing` 或 `B:\Apps\DingTalk`。应用二进制放在 B 盘后，Windows 仍可能在用户 `AppData` 写入少量登录状态、缓存与更新元数据，这是客户端正常行为。
 
-## 课程入库群规则
-
-建议建立一个专用“课程入库群”。老师历史文件由账号本人一次性转发到该群，后续新教程和素材直接发到群里。消息可以带以下标签；不带标签时默认当作素材，版权默认为未知：
-
-- `#教程`：需要转写/OCR 并提炼剪辑规则的课程内容。
-- `#案例` 或 `#参考`：只提取节奏、钩子和字幕结构的参考成片。
-- `#素材`：允许进入镜头库的源视频、音频或图片。
-- `#个人学习`：只允许学习课程规则，不能用于商用成片。
-- `#商用授权`：只有确实取得商用许可时才能标记。
-
-## 无凭据端到端模拟
-
-模拟只替代钉钉消息来源，后面的文件落盘、数据库去重和课程处理全部使用正式服务：
+运行只读检查：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\generate-course-fixture.ps1
-& .\services\control-plane\.venv\Scripts\python.exe .\scripts\simulate-dingtalk-course.py --base-url http://127.0.0.1:8130
+powershell -ExecutionPolicy Bypass -File scripts/doctor-dingtalk.ps1
 ```
 
-脚本默认只允许回环地址。向已部署服务器提交测试数据必须显式添加 `--allow-remote`，避免误把测试素材发到外部环境。
+输出只包含安装路径、版本、签名状态和进程状态，不读取账号、聊天、文件或凭据。
 
-## 安全规则
+## 无真实钉钉凭据时的端到端验收
 
-- 仅接受视频、音频、图片、PDF、DOCX、PPTX 和纯文本。
-- 下载前检查声明大小，下载后再次检查真实字节数和响应 MIME。
-- 以钉钉消息 ID 持久化去重，控制面成功创建课程后才标记消息已处理。
-- 钉钉进入的附件默认 `rights_status=unknown`；只有明确标记且可追溯的素材才进入商用候选。
-- Client Secret、Access Token、下载 URL 和文件内容均不写日志。
+```powershell
+services/control-plane/.venv/Scripts/python.exe scripts/simulate-dingtalk-course.py `
+  --base-url http://127.0.0.1:8130
+```
 
-## 未配置行为
+模拟事件含教程、案例和三段合成素材。后续教程理解、素材镜头分析、授权过滤、自动剪辑、质量门禁和剪映交付均使用真实代码。
 
-缺少凭据时连接器进程以退出码 2 结束，并输出不含密钥的 `not_configured` 原因；控制面和 ArcReel 可继续独立运行。
+## 真实组织接入
+
+1. 管理员创建企业内部应用与 Stream 机器人。
+2. 为机器人开通群消息与文件下载所需权限。
+3. 在服务器的秘密管理界面设置 `DINGTALK_CLIENT_ID` 和 `DINGTALK_CLIENT_SECRET`，不要写入 Git。
+4. 启动 `dingtalk-connector`，把课程文件发到专用群；用 `#教程`、`#案例`、`#素材`、`#个人学习`、`#商用授权` 标记文件用途和权利。
+5. 购买课程不自动等于取得商用素材授权；商用任务只会选择明确标记 `commercial_authorized` 的素材。

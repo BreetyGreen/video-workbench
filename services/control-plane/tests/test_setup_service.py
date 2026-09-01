@@ -46,8 +46,8 @@ def test_fresh_setup_keeps_external_providers_optional(tmp_path: Path):
     assert result["progress"]["configured_optional"] == 0
 
     capabilities = result["capabilities"]
-    assert len(capabilities) == 15
-    assert len({item["id"] for item in capabilities}) == 15
+    assert len(capabilities) == 17
+    assert len({item["id"] for item in capabilities}) == 17
     assert {item["tier"] for item in capabilities} == {
         "local_no_key",
         "optional_key",

@@ -28,7 +28,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAsset, CourseAssetRole, EditingRule, LicensedAsset, RightsStatus, TaskStatus
+from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -52,10 +52,18 @@ from app.schemas.automation import (
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
 from app.schemas.courses import CourseAssetRead, CourseRead
-from app.schemas.course_knowledge import EditingRecipeRead, EditingRuleRead, ShotSearchResultRead
+from app.schemas.course_knowledge import (
+    CourseEditJobCreate,
+    CourseEditJobHandoffUpdate,
+    CourseEditJobRead,
+    EditingRecipeRead,
+    EditingRuleRead,
+    ShotSearchResultRead,
+)
 from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
+from app.schemas.device_delivery import DevicePairRead, DevicePairRequest, PairingCodeRead
 from app.services.automation_service import (
     AutomationScheduler,
     DailyAutomation,
@@ -90,6 +98,8 @@ from app.services.course_intake_service import CourseIntakeError, CourseIntakeSe
 from app.services.tutorial_understanding_service import TutorialUnderstandingService
 from app.services.course_material_analysis_service import CourseMaterialAnalysisService
 from app.services.course_material_search_service import CourseMaterialSearchService
+from app.services.course_edit_job_service import CourseEditJobService
+from app.services.device_delivery_service import DeviceDeliveryService
 logger = logging.getLogger(__name__)
 
 
@@ -101,6 +111,8 @@ def create_app(
     usage_client_factory: Callable[[str, str], VolcengineUsageClient] | None = None,
     douyin_search_client: DouyinSearchClient | None = None,
     douyin_publish_client: DouyinPublishClient | None = None,
+    pipeline_service_override: object | None = None,
+    jianying_handoff_override: object | None = None,
 ) -> FastAPI:
     app_settings = settings or Settings()
     database = Database(app_settings.database_url)
@@ -126,7 +138,11 @@ def create_app(
         timeout_seconds=app_settings.volcano_tts_timeout_seconds,
         ffprobe_bin=app_settings.ffprobe_bin,
     )
-    pipeline_service = PipelineService(app_settings, dify=analysis_client, tts=speech_client)
+    pipeline_service = pipeline_service_override or PipelineService(
+        app_settings,
+        dify=analysis_client,
+        tts=speech_client,
+    )
     douyin_client = douyin_search_client or DouyinSearchClient(app_settings)
     publish_client = douyin_publish_client or DouyinPublishClient()
     douyin_delivery = DouyinDeliveryService(publish_client, app_settings.artifact_dir)
@@ -176,7 +192,7 @@ def create_app(
     voice_usage = UsageService()
     setup_service = SetupService(app_settings.data_dir)
     jianying_runtime = JianyingRuntimeService(app_settings.data_dir)
-    jianying_handoff = JianyingHandoffService(
+    jianying_handoff = jianying_handoff_override or JianyingHandoffService(
         app_settings.data_dir,
         app_settings.artifact_dir,
         jianying_runtime,
@@ -188,6 +204,8 @@ def create_app(
     tutorial_understanding = TutorialUnderstandingService()
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
     course_material_search = CourseMaterialSearchService()
+    course_edit_jobs = CourseEditJobService(app_settings, pipeline_service, jianying_handoff)
+    device_delivery = DeviceDeliveryService(usage_key)
 
     def course_read(course, assets) -> CourseRead:
         return CourseRead(
@@ -948,6 +966,153 @@ def create_app(
             limit=limit,
         )
         return [ShotSearchResultRead(**result.__dict__) for result in results]
+
+    @app.post("/api/course-edit-jobs", response_model=CourseEditJobRead, status_code=status.HTTP_201_CREATED)
+    def create_course_edit_job(
+        request: CourseEditJobCreate,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        try:
+            result = course_edit_jobs.run(
+                session,
+                course_id=request.course_id,
+                title=request.title,
+                content_type=request.content_type,
+                commercial=request.commercial,
+                quality_profile=request.quality_profile,
+                cloud_processing_allowed=request.cloud_processing_allowed,
+            )
+        except ValueError as error:
+            code = str(error)
+            status_code = 404 if code == "course_not_found" else 422
+            raise HTTPException(status_code=status_code, detail={"code": code}) from error
+        return CourseEditJobRead.model_validate(result.job)
+
+    @app.get("/api/course-edit-jobs", response_model=list[CourseEditJobRead])
+    def list_course_edit_jobs(
+        state: str | None = None,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[CourseEditJobRead]:
+        statement = select(CourseEditJob)
+        if state:
+            statement = statement.where(CourseEditJob.state == state)
+        statement = statement.order_by(CourseEditJob.created_at).limit(min(max(limit, 1), 100))
+        return [CourseEditJobRead.model_validate(item) for item in session.exec(statement).all()]
+
+    @app.get("/api/course-edit-jobs/{job_id}", response_model=CourseEditJobRead)
+    def read_course_edit_job(
+        job_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        job = session.get(CourseEditJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        return CourseEditJobRead.model_validate(job)
+
+    @app.post("/api/course-edit-jobs/{job_id}/device-handoff", response_model=CourseEditJobRead)
+    def update_course_edit_job_handoff(
+        job_id: str,
+        update: CourseEditJobHandoffUpdate,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        job = session.get(CourseEditJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        if job.state not in {"awaiting_device", "handoff_failed", "delivered_to_jianying"}:
+            raise HTTPException(status_code=409, detail={"code": "job_not_awaiting_device"})
+        job.handoff_status = update.status
+        job.state = "delivered_to_jianying" if update.status == "imported" else "handoff_failed"
+        job.error_code = "" if update.status == "imported" else (update.error_code or "device_handoff_failed")
+        job.updated_at = datetime.now(UTC)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return CourseEditJobRead.model_validate(job)
+
+    def authenticated_device(request: Request, session: Session):
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            raise HTTPException(status_code=401, detail={"code": "device_token_required"})
+        try:
+            return device_delivery.authenticate(session, token)
+        except ValueError as error:
+            raise HTTPException(status_code=401, detail={"code": str(error)}) from error
+
+    @app.post("/api/devices/pairing-codes", response_model=PairingCodeRead, status_code=status.HTTP_201_CREATED)
+    def issue_device_pairing_code(
+        session: Session = Depends(session_dependency),
+    ) -> PairingCodeRead:
+        issued = device_delivery.issue_code(session)
+        return PairingCodeRead(id=issued.id, code=issued.code, expires_at=issued.expires_at)
+
+    @app.post("/api/devices/pair", response_model=DevicePairRead, status_code=status.HTTP_201_CREATED)
+    def pair_delivery_device(
+        request: DevicePairRequest,
+        session: Session = Depends(session_dependency),
+    ) -> DevicePairRead:
+        try:
+            paired = device_delivery.pair(session, code=request.code, name=request.name)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail={"code": str(error)}) from error
+        return DevicePairRead(device_id=paired.device.id, name=paired.device.name, token=paired.token)
+
+    @app.get("/api/devices/me/course-edit-jobs", response_model=list[CourseEditJobRead])
+    def list_device_course_edit_jobs(
+        request: Request,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[CourseEditJobRead]:
+        authenticated_device(request, session)
+        statement = (
+            select(CourseEditJob)
+            .where(CourseEditJob.state == "awaiting_device")
+            .order_by(CourseEditJob.created_at)
+            .limit(min(max(limit, 1), 100))
+        )
+        return [CourseEditJobRead.model_validate(item) for item in session.exec(statement).all()]
+
+    @app.get("/api/devices/me/course-edit-jobs/{job_id}/artifacts/{artifact_name}")
+    def download_device_job_artifact(
+        job_id: str,
+        artifact_name: str,
+        request: Request,
+        session: Session = Depends(session_dependency),
+    ) -> FileResponse:
+        authenticated_device(request, session)
+        job = session.get(CourseEditJob, job_id)
+        if job is None or not job.task_id or job.state not in {"awaiting_device", "handoff_failed"}:
+            raise HTTPException(status_code=404, detail={"code": "device_delivery_not_found"})
+        if artifact_name not in {"draft.zip", "quality-report.json"}:
+            raise HTTPException(status_code=404, detail={"code": "artifact_not_found"})
+        try:
+            path = review_service.artifact_path(job.task_id, artifact_name)
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=404, detail={"code": "artifact_not_found"}) from error
+        return FileResponse(path, filename=path.name)
+
+    @app.post("/api/devices/me/course-edit-jobs/{job_id}/handoff", response_model=CourseEditJobRead)
+    def report_device_job_handoff(
+        job_id: str,
+        update: CourseEditJobHandoffUpdate,
+        request: Request,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        authenticated_device(request, session)
+        job = session.get(CourseEditJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        if job.state not in {"awaiting_device", "handoff_failed", "delivered_to_jianying"}:
+            raise HTTPException(status_code=409, detail={"code": "job_not_awaiting_device"})
+        job.handoff_status = update.status
+        job.state = "delivered_to_jianying" if update.status == "imported" else "handoff_failed"
+        job.error_code = "" if update.status == "imported" else (update.error_code or "device_handoff_failed")
+        job.updated_at = datetime.now(UTC)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return CourseEditJobRead.model_validate(job)
 
     @app.get("/api/tasks", response_model=list[TaskRead])
     def read_tasks(

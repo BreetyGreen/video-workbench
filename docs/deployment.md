@@ -48,3 +48,19 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-server.ps1 -SshTarget us
 - Pexels/Pixabay/Seedance 缺凭证时显示 `not_configured`，不影响本地授权素材回退。
 - 抖音交付只有在应用获得 `video.create.bind` 且用户 OAuth 有效时启用。
 - 剪映草稿在 Windows 上运行 `verify-jianying-handoff.ps1` 后再人工打开终审。
+
+## 配对用户电脑并自动导入剪映
+
+1. 管理员登录受 Basic Auth 保护的控制台，调用 `POST /api/devices/pairing-codes` 生成十分钟有效、只能使用一次的配对码。
+2. 用户在 Windows 或 Mac 上首次运行：
+
+   ```bash
+   python scripts/sync-jianying-device.py \
+     --server-url https://你的域名 \
+     --data-dir "用户自己的同步数据目录" \
+     --watch
+   ```
+
+3. 助手无回显地要求配对码，换取只显示一次的设备令牌并保存到本机权限受限文件。服务器只存令牌 HMAC-SHA256 摘要。
+4. 之后助手只访问 `/api/devices/me/*` 专用接口，下载质量报告和草稿、执行 ZIP/媒体路径校验、新建草稿、启动剪映并回报结果。
+5. Caddy 只允许 `/api/devices/pair` 与 `/api/devices/me/*` 跳过网页 Basic Auth；这些接口本身分别由一次性码和设备 Bearer 令牌保护。`/api/devices/pairing-codes` 仍受管理员 Basic Auth 保护。

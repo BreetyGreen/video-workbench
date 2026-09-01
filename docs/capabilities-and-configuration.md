@@ -190,6 +190,17 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 
 ## 外部授权能力
 
+### course-automation：课程理解与自动成片
+
+课程文件可以来自钉钉，也可以直接调用课程入库接口。服务器会保存教程、案例和素材的角色与 SHA-256，教程规则保留来源页码或时间码，视频素材做镜头切分和检索。创建商用作业时只复制明确标记为 `commercial_authorized` 的视频；只有个人学习权利或未知权利的素材不会进入商用成片。
+
+```text
+课程入库 → 教程规则抽取 → 素材镜头索引 → POST /api/course-edit-jobs
+→ 多素材 9:16 自动剪辑 → 质量门禁 → 等待本机设备或直接导入剪映
+```
+
+该主链复用本地 FFmpeg、字幕、音频路由和草稿生成器，不要求云端 Key。质量门禁通过后不再强制人工点击“批准”；阻断项失败时仍会停止交付并保留证据。
+
 ### douyin-search：抖音官方视频搜索
 
 需要：
@@ -219,6 +230,20 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 - 可选 `DINGTALK_ROBOT_CODE`
 
 未配置时直接在工作台上传。钉钉入口只接收组织已授权文件，不把一个 Webhook 当成完整文件下载授权。
+
+### remote-jianying-sync：服务器成片自动进入本机剪映
+
+剪映运行在用户的 Windows/Mac 上，Linux 服务器不能直接写它的草稿目录。因此服务器把通过质量门禁的作业放进 `awaiting_device` 队列，本机轻量同步助手负责下载 `quality-report.json` 和 `draft.zip`、再次校验 ZIP 与媒体路径、只创建新草稿、启动剪映并向服务器回报结果。
+
+一次运行：
+
+```bash
+python scripts/sync-jianying-device.py \
+  --server-url https://video.example.com \
+  --data-dir "$HOME/Library/Application Support/VideoWorkbench Sync"
+```
+
+持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码，成功后只把设备令牌保存到本机运行目录的权限受限文件；也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。当前仓库已经完成单次配对、令牌哈希存储、设备专用队列、下载、导入与结果回报主链；公开分发前仍需完成 Windows/macOS 安装包签名和开机自启。
 
 ### remote-deployment：服务器、域名和 HTTPS
 
