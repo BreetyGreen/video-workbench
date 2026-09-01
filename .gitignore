@@ -18,3 +18,8 @@ __pycache__/
 fixtures/media/*.mp4
 outputs/
 work/
+sync-helper/build/
+sync-helper/dist/
+sync-helper/*.spec
+/build/
+/*.spec

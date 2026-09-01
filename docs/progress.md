@@ -15,12 +15,14 @@
 - 同步助手已把该草稿导入 `B:\JianyingData\Drafts\JianyingPro Drafts\课程自动剪辑验收-无云-dd74f6bb-eda6537c`，服务器状态回报为 `delivered_to_jianying`，剪映启动请求状态为 `launched`。
 - 第二条真实作业 `a1542067-da9c-49f9-bd6d-e5ccd91266a2` 完成一次性配对、设备令牌认证、专用队列下载、媒体校验、导入与回报；草稿位于 `B:\JianyingData\Drafts\JianyingPro Drafts\课程设备配对验收-49675c0e-4d046c8e`，启动状态为 `launched`。
 - 钉钉 8.2.0.260119001 已安装在 `B:\DingDing` 并运行；主程序 Authenticode 状态为 `Valid`，新增 `scripts/doctor-dingtalk.ps1` 做只读检查。
+- 新增 PyInstaller 6.22.2 锁定构建、Windows/macOS 安装脚本、登录自启和 `sync-helper-v*` GitHub Release 工作流。Windows 单文件产物已真实构建并执行完整烟测：返回码 0，识别 `B:\Apps\JianyingPro\JianyingPro.exe`，确认 `B:\JianyingData\Drafts\JianyingPro Drafts` 可写并完成服务端队列请求。
+- 配置助手新增“服务器交付”区域：管理员可直接生成十分钟一次性配对码，普通用户从 Release 下载助手后只配对一次，不再需要 Codex 常驻。
 
 ### Open / External user action
 
 - 真正从钉钉组织群自动收历史网课文件，仍需要管理员创建企业内部应用、Stream 机器人并授权文件下载；当前模拟入口只替代钉钉事件来源，后续处理全部是真实代码。
 - 生产服务器、域名、HTTPS 和设备访问控制尚未由用户提供，因此本次服务器/设备闭环在本机两个独立数据目录与 HTTP loopback 上验收。
-- 当前同步助手是 Python CLI；一次性配对、令牌哈希存储和设备专用 API 已实现，正式给普通用户分发前仍需 Windows/macOS 安装包签名和开机自启。
+- Windows/macOS 单文件构建和开机自启已实现；正式面向普通用户公开分发仍需仓库所有者提供 Authenticode 与 Apple Developer ID/公证身份。macOS 二进制及 Gatekeeper/剪映实机仍需在 Apple 机器或 CI 产物上验收。
 - 合成验收素材没有可转写人声，因此本次关闭 ASR/OCR，验证的是课程规则、授权筛选、多素材剪辑、渲染、质检和剪映交付；真实课程教程的视频转写质量仍需用户提供课程文件后验收。
 
 ## 2026-08-31 clone 前能力与配置收口

@@ -46,7 +46,13 @@ macOS 详细说明与故障定位见 [macOS 本地运行手册](docs/runbooks/ma
 
 ## 不依赖 Codex 的服务器课程模式
 
-Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端：
+Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 Apple Silicon Mac 产物并挂到 Release：
+
+- 下载入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>
+- Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，优先安装到 B 盘，其他电脑自动使用用户本地应用目录，并注册登录自启。
+- macOS：`VideoWorkbenchSync` + `install-macos.sh` + LaunchAgent，安装到用户目录并登录自启。
+
+仓库内 Python 命令只保留给开发者调试：
 
 ```bash
 python scripts/sync-jianying-device.py \
@@ -55,7 +61,7 @@ python scripts/sync-jianying-device.py \
   --watch
 ```
 
-Windows 可把 `--data-dir` 指向 B 盘。正式公网部署必须使用 HTTPS 和访问控制；真实钉钉群收件仍需要企业应用、Stream 机器人和组织管理员授权。详细边界见 [课程与配置指南](docs/capabilities-and-configuration.md) 和 [钉钉运行手册](docs/runbooks/dingtalk.md)。
+Windows 可把 `--data-dir` 指向 B 盘。正式公网部署必须使用 HTTPS 和访问控制；真实钉钉群收件仍需要企业应用、Stream 机器人和组织管理员授权。公开分发前还必须给 Windows 程序做 Authenticode 签名，并给 macOS 程序做 Developer ID 签名和公证，否则系统会显示未知开发者警告。详细边界见 [课程与配置指南](docs/capabilities-and-configuration.md) 和 [钉钉运行手册](docs/runbooks/dingtalk.md)。
 
 > 2026-08-21 收口入口：当前状态见 `docs/progress.md`，生产部署见 `docs/deployment.md`，必须由账号本人完成的购买与授权见 `docs/user-required-actions.md`。
 

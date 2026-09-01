@@ -8,12 +8,12 @@ import getpass
 import json
 import os
 from pathlib import Path
-import subprocess
+import runpy
 import sys
 import time
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 CONTROL_PLANE = REPO_ROOT / "services" / "control-plane"
 sys.path.insert(0, str(CONTROL_PLANE))
 
@@ -22,18 +22,24 @@ from app.services.jianying_runtime_service import JianyingRuntimeService  # noqa
 from app.services.remote_jianying_sync_service import RemoteJianyingSyncService, UrlLibSyncHttp  # noqa: E402
 
 
+_HOST_HELPER: dict[str, object] | None = None
+
+
 def prepare_runtime(data_dir: Path) -> None:
-    subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts" / "jianying-host-helper.py"),
-            "--data-dir",
-            str(data_dir),
-            "--container-draft-root",
-            "__host__",
-        ],
-        check=True,
-    )
+    """Refresh the Jianying manifest without spawning a Python interpreter.
+
+    A PyInstaller one-file executable cannot use ``sys.executable`` to run a
+    bundled ``.py`` data file: ``sys.executable`` points back to the packaged
+    helper itself. Loading the audited host helper in-process keeps the source
+    and packaged execution paths identical.
+    """
+    global _HOST_HELPER
+    if _HOST_HELPER is None:
+        _HOST_HELPER = runpy.run_path(str(REPO_ROOT / "scripts" / "jianying-host-helper.py"))
+    write_manifest = _HOST_HELPER["write_manifest"]
+    process_requests = _HOST_HELPER["process_requests"]
+    manifest = write_manifest(data_dir, container_draft_root="__host__")  # type: ignore[operator]
+    process_requests(data_dir, manifest)  # type: ignore[operator]
 
 
 def load_or_pair_token(server_url: str, data_dir: Path, device_name: str) -> str:

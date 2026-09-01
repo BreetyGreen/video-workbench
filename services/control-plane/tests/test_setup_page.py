@@ -31,6 +31,9 @@ def test_setup_page_contains_local_first_flow(client: TestClient):
     assert 'id="setup-runtime-list"' in page.text
     assert 'id="setup-provider-list"' in page.text
     assert 'id="setup-capability-list"' in page.text
+    assert 'id="create-device-pairing-code"' in page.text
+    assert 'id="device-pairing-result"' in page.text
+    assert "下载 Mac / Windows 同步助手" in page.text
     assert 'id="confirm-local-mode"' in page.text
     assert 'aria-label="首次启动进度"' in page.text
     assert 'href="/"' in page.text
@@ -57,6 +60,8 @@ def test_setup_assets_are_served_and_use_real_apis(client: TestClient):
     assert "runtime.runtime?.inbox_dir" in script.text
     assert "/api/setup/preferences" in script.text
     assert "/api/setup/validate/" in script.text
+    assert "/api/devices/pairing-codes" in script.text
+    assert "window.location.origin" in script.text
     assert "localStorage" not in script.text
 
 

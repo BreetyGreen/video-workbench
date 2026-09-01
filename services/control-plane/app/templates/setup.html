@@ -82,6 +82,25 @@
         </div>
       </section>
 
+      <section class="setup-section device-pairing" aria-labelledby="device-pairing-title">
+        <div class="section-copy provider-heading">
+          <div>
+            <span class="setup-kicker">服务器交付</span>
+            <h2 id="device-pairing-title">把成片自动放进这台电脑的剪映</h2>
+            <p>管理员在这里生成一次性配对码。Mac/Windows 用户安装同步助手后只输入一次，之后无需 Codex，也不用反复填写 Key。</p>
+          </div>
+          <a class="setup-link" href="https://github.com/BreetyGreen/video-workbench/releases/latest" target="_blank" rel="noreferrer">下载 Mac / Windows 同步助手 ↗</a>
+        </div>
+        <div class="device-pairing-panel">
+          <div>
+            <span>当前服务器地址</span>
+            <strong id="device-server-url">正在读取…</strong>
+          </div>
+          <button class="setup-button" id="create-device-pairing-code" type="button">生成 10 分钟配对码</button>
+        </div>
+        <output class="device-pairing-result" id="device-pairing-result" aria-live="polite" hidden></output>
+      </section>
+
       <footer class="setup-footer">
         <div>
           <strong>无需等待所有服务配置完成</strong>
@@ -92,6 +111,6 @@
     </main>
 
     <div class="setup-toast" id="setup-toast" role="status" aria-live="polite"></div>
-    <script src="/static/setup.js?v=20260831-1" defer></script>
+    <script src="/static/setup.js?v=20260901-1" defer></script>
   </body>
 </html>

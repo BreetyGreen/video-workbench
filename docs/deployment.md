@@ -2,7 +2,7 @@
 
 ## 架构边界
 
-控制台、SQLite/持久化数据、定时任务、Dify 调用和素材目录部署到服务器。剪映保留在 Windows 本机；服务器不尝试在 Linux 容器里运行剪映。服务器生成的 `draft.zip` 由本地导入脚本放入剪映草稿目录。
+控制台、SQLite/持久化数据、定时任务、Dify 调用和素材目录部署到服务器。剪映保留在 Windows/Mac 用户电脑；服务器不尝试在 Linux 容器里运行剪映。服务器生成的 `draft.zip` 由已配对的同步助手校验后放入剪映草稿目录并启动客户端。
 
 ## 服务器要求
 
@@ -52,7 +52,8 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-server.ps1 -SshTarget us
 ## 配对用户电脑并自动导入剪映
 
 1. 管理员登录受 Basic Auth 保护的控制台，调用 `POST /api/devices/pairing-codes` 生成十分钟有效、只能使用一次的配对码。
-2. 用户在 Windows 或 Mac 上首次运行：
+2. 普通用户从 [Release 页面](https://github.com/BreetyGreen/video-workbench/releases/latest) 下载对应系统产物并运行随包安装脚本；安装器注册登录自启。首次运行输入一次配对码，以后不需要 Codex 或 Python。
+3. 开发者需要排障时才直接运行：
 
    ```bash
    python scripts/sync-jianying-device.py \
@@ -61,6 +62,14 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-server.ps1 -SshTarget us
      --watch
    ```
 
-3. 助手无回显地要求配对码，换取只显示一次的设备令牌并保存到本机权限受限文件。服务器只存令牌 HMAC-SHA256 摘要。
-4. 之后助手只访问 `/api/devices/me/*` 专用接口，下载质量报告和草稿、执行 ZIP/媒体路径校验、新建草稿、启动剪映并回报结果。
-5. Caddy 只允许 `/api/devices/pair` 与 `/api/devices/me/*` 跳过网页 Basic Auth；这些接口本身分别由一次性码和设备 Bearer 令牌保护。`/api/devices/pairing-codes` 仍受管理员 Basic Auth 保护。
+4. 助手无回显地要求配对码，换取只显示一次的设备令牌并保存到本机权限受限文件。服务器只存令牌 HMAC-SHA256 摘要。
+5. 之后助手只访问 `/api/devices/me/*` 专用接口，下载质量报告和草稿、执行 ZIP/媒体路径校验、新建草稿、启动剪映并回报结果。
+6. Caddy 只允许 `/api/devices/pair` 与 `/api/devices/me/*` 跳过网页 Basic Auth；这些接口本身分别由一次性码和设备 Bearer 令牌保护。`/api/devices/pairing-codes` 仍受管理员 Basic Auth 保护。
+
+## 同步助手发布
+
+- 本地构建：Windows 运行 `sync-helper/build.ps1`，macOS 运行 `sync-helper/build.sh`。
+- 自动构建：推送 `sync-helper-v*` 标签后，`.github/workflows/sync-helper-release.yml` 在 `windows-latest` 和 `macos-14` 分别生成产物并发布到 GitHub Release。
+- Windows 安装器优先使用 B 盘；没有 B 盘时回退到当前用户的 `LOCALAPPDATA`，不会假设所有用户磁盘布局相同。
+- macOS 使用 `~/Applications`、`~/Library/Application Support` 和用户级 LaunchAgent，不要求管理员修改系统目录。
+- GitHub Actions 当前生成的是未签名构建。对外发布前必须补充 Authenticode 和 Apple Developer ID/公证；这一步需要仓库所有者提供签名身份，不能由代码自行伪造。

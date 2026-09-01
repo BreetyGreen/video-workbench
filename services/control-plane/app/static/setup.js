@@ -177,6 +177,26 @@ async function confirmLocalMode() {
   }
 }
 
+async function createDevicePairingCode() {
+  const button = $("#create-device-pairing-code");
+  const output = $("#device-pairing-result");
+  button.disabled = true;
+  button.textContent = "正在生成…";
+  try {
+    const pairing = await api("/api/devices/pairing-codes", { method: "POST" });
+    const expiry = new Date(pairing.expires_at).toLocaleString("zh-CN");
+    output.hidden = false;
+    output.innerHTML = `<span>一次性配对码</span><strong>${escapeHtml(pairing.code)}</strong><small>请在 ${escapeHtml(expiry)} 前输入同步助手；使用一次后立即失效。</small>`;
+    await navigator.clipboard?.writeText(pairing.code).catch(() => {});
+    toast("配对码已生成并尝试复制到剪贴板");
+  } catch (error) {
+    toast(`无法生成配对码：${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "重新生成配对码";
+  }
+}
+
 async function loadSetup() {
   try {
     renderSetup(await api("/api/setup/status"));
@@ -188,4 +208,6 @@ async function loadSetup() {
 
 $("#confirm-local-mode").addEventListener("click", confirmLocalMode);
 $("#finish-setup").addEventListener("click", confirmLocalMode);
+$("#device-server-url").textContent = window.location.origin;
+$("#create-device-pairing-code").addEventListener("click", createDevicePairingCode);
 loadSetup();

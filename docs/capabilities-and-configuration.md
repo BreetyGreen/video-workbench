@@ -235,7 +235,9 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 
 剪映运行在用户的 Windows/Mac 上，Linux 服务器不能直接写它的草稿目录。因此服务器把通过质量门禁的作业放进 `awaiting_device` 队列，本机轻量同步助手负责下载 `quality-report.json` 和 `draft.zip`、再次校验 ZIP 与媒体路径、只创建新草稿、启动剪映并向服务器回报结果。
 
-一次运行：
+普通用户从 [GitHub Releases](https://github.com/BreetyGreen/video-workbench/releases/latest) 下载与系统对应的同步助手。管理员在工作台“配置助手 → 服务器交付”生成十分钟一次性配对码；用户首次安装时输入一次，以后登录系统自动监听，不需要 Codex、Python 或仓库。
+
+开发者调试时也可以直接运行：
 
 ```bash
 python scripts/sync-jianying-device.py \
@@ -243,7 +245,9 @@ python scripts/sync-jianying-device.py \
   --data-dir "$HOME/Library/Application Support/VideoWorkbench Sync"
 ```
 
-持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码，成功后只把设备令牌保存到本机运行目录的权限受限文件；也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。当前仓库已经完成单次配对、令牌哈希存储、设备专用队列、下载、导入与结果回报主链；公开分发前仍需完成 Windows/macOS 安装包签名和开机自启。
+持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码，成功后只把设备令牌保存到本机运行目录的权限受限文件；也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。
+
+当前仓库已经完成单次配对、令牌哈希存储、设备专用队列、下载、导入、剪映启动、结果回报、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
 
 ### remote-deployment：服务器、域名和 HTTPS
 

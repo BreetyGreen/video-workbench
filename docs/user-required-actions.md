@@ -68,9 +68,16 @@
 
 ## 6. 首次配对要接收草稿的电脑
 
-1. 在受保护的服务器控制台生成一次性设备配对码。
-2. 在已安装并至少打开过一次剪映/CapCut 的电脑运行同步助手，输入一次配对码。
+1. 在受保护的服务器控制台打开“配置助手 → 服务器交付”，点击“生成 10 分钟配对码”。
+2. 从项目 [Release 页面](https://github.com/BreetyGreen/video-workbench/releases/latest) 下载对应系统同步助手；在已安装并至少打开过一次剪映/CapCut 的电脑运行安装脚本，输入一次配对码。
 3. Windows/macOS 弹出文件访问或自动化权限时由设备本人确认；以后助手可以常驻监听，不需要 Codex。
+
+## 7. 对外分发同步助手时的签名身份
+
+1. Windows 公开分发需要受信任的 Authenticode 代码签名证书。
+2. macOS 公开分发需要 Apple Developer Program 的 Developer ID Application 证书，并完成 Apple notarization。
+3. 把签名凭据存入 GitHub Actions Secrets，由发布工作流使用；不要把证书密码或 Apple 凭据提交进仓库或发到聊天。
+4. 未签名构建可以用于开发验收，但不应描述为面向普通用户的无警告安装包。
 
 ## 不需要你再做的事情
 
