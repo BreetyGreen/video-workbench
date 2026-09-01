@@ -1,4 +1,4 @@
-# 钉钉 Stream 素材接入
+# 钉钉 Stream 课程入库
 
 ## 准备
 
@@ -15,12 +15,33 @@ DINGTALK_MAX_FILE_BYTES=524288000
 DINGTALK_DEDUP_DATABASE=data/dingtalk/dedup.db
 ```
 
+## 课程入库群规则
+
+建议建立一个专用“课程入库群”。老师历史文件由账号本人一次性转发到该群，后续新教程和素材直接发到群里。消息可以带以下标签；不带标签时默认当作素材，版权默认为未知：
+
+- `#教程`：需要转写/OCR 并提炼剪辑规则的课程内容。
+- `#案例` 或 `#参考`：只提取节奏、钩子和字幕结构的参考成片。
+- `#素材`：允许进入镜头库的源视频、音频或图片。
+- `#个人学习`：只允许学习课程规则，不能用于商用成片。
+- `#商用授权`：只有确实取得商用许可时才能标记。
+
+## 无凭据端到端模拟
+
+模拟只替代钉钉消息来源，后面的文件落盘、数据库去重和课程处理全部使用正式服务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-course-fixture.ps1
+& .\services\control-plane\.venv\Scripts\python.exe .\scripts\simulate-dingtalk-course.py --base-url http://127.0.0.1:8130
+```
+
+脚本默认只允许回环地址。向已部署服务器提交测试数据必须显式添加 `--allow-remote`，避免误把测试素材发到外部环境。
+
 ## 安全规则
 
 - 仅接受视频、音频、图片、PDF、DOCX、PPTX 和纯文本。
 - 下载前检查声明大小，下载后再次检查真实字节数和响应 MIME。
-- 以钉钉消息 ID 持久化去重，控制面成功创建任务后才标记消息已处理。
-- 钉钉进入的素材默认 `rights_confirmed=false`，必须在审核页人工确认版权。
+- 以钉钉消息 ID 持久化去重，控制面成功创建课程后才标记消息已处理。
+- 钉钉进入的附件默认 `rights_status=unknown`；只有明确标记且可追溯的素材才进入商用候选。
 - Client Secret、Access Token、下载 URL 和文件内容均不写日志。
 
 ## 未配置行为

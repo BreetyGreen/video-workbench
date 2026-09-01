@@ -6,6 +6,7 @@
 .worktrees/
 .tmp/
 data/
+fixtures/dingtalk/media/*.mp4
 docs/verification/
 services/control-plane/.venv/
 services/control-plane/data/
