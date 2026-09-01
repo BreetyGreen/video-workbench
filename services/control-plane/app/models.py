@@ -25,6 +25,51 @@ class DeliveryState(StrEnum):
     DOUYIN_PUBLISHED = "douyin_published"
 
 
+class CourseAssetRole(StrEnum):
+    TUTORIAL = "tutorial"
+    REFERENCE = "reference"
+    MATERIAL = "material"
+
+
+class RightsStatus(StrEnum):
+    UNKNOWN = "unknown"
+    PERSONAL_LEARNING = "personal_learning"
+    COMMERCIAL_AUTHORIZED = "commercial_authorized"
+
+
+class Course(SQLModel, table=True):
+    __tablename__ = "courses"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    title: str
+    source_type: str = Field(default="dingtalk", index=True)
+    source_user: str = ""
+    source_conversation: str = ""
+    source_message_id: str = Field(index=True, unique=True)
+    status: str = Field(default="received", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CourseAsset(SQLModel, table=True):
+    __tablename__ = "course_assets"
+    __table_args__ = (
+        UniqueConstraint("course_id", "sha256", "role", name="uq_course_asset_hash_role"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    role: CourseAssetRole = Field(index=True)
+    original_name: str
+    stored_path: str
+    mime_type: str
+    size_bytes: int
+    sha256: str = Field(index=True)
+    rights_status: RightsStatus = Field(default=RightsStatus.UNKNOWN, index=True)
+    source_message_id: str = Field(default="", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class VideoTask(SQLModel, table=True):
     __tablename__ = "video_tasks"
 
