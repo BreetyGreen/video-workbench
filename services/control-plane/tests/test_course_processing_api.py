@@ -9,7 +9,7 @@ from app.config import Settings
 from app.main import create_app
 
 
-def test_process_course_returns_cited_recipe(tmp_path: Path) -> None:
+def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
         database_url=f"sqlite:///{(tmp_path / 'control-plane.db').as_posix()}",
@@ -33,7 +33,7 @@ def test_process_course_returns_cited_recipe(tmp_path: Path) -> None:
                         "text/plain",
                     ),
                 ),
-                ("files", ("material.mp4", b"video", "video/mp4")),
+                ("files", ("material.mp4", ffmpeg_fixture.read_bytes(), "video/mp4")),
             ],
         ).json()
 
@@ -46,3 +46,4 @@ def test_process_course_returns_cited_recipe(tmp_path: Path) -> None:
     assert {rule["category"] for rule in result["rules"]} == {"hook", "pacing"}
     assert all(rule["source_asset_id"] for rule in result["rules"])
     assert all(rule["source_page"] for rule in result["rules"])
+    assert result["shot_count"] >= 1

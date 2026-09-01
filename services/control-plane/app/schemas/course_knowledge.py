@@ -28,3 +28,4 @@ class EditingRecipeRead(BaseModel):
     summary: str
     created_at: datetime
     rules: list[EditingRuleRead]
+    shot_count: int = 0

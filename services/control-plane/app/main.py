@@ -28,7 +28,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAssetRole, EditingRule, LicensedAsset, RightsStatus, TaskStatus
+from app.models import CourseAsset, CourseAssetRole, EditingRule, LicensedAsset, RightsStatus, TaskStatus
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -88,6 +88,7 @@ from app.services.jianying_runtime_service import JianyingRuntimeService
 from app.services.jianying_handoff_service import JianyingHandoffService
 from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
 from app.services.tutorial_understanding_service import TutorialUnderstandingService
+from app.services.course_material_analysis_service import CourseMaterialAnalysisService
 logger = logging.getLogger(__name__)
 
 
@@ -184,6 +185,7 @@ def create_app(
         app_settings.course_max_file_bytes,
     )
     tutorial_understanding = TutorialUnderstandingService()
+    course_material_analysis = CourseMaterialAnalysisService(app_settings)
 
     def course_read(course, assets) -> CourseRead:
         return CourseRead(
@@ -910,9 +912,22 @@ def create_app(
                 .order_by(EditingRule.sort_order, EditingRule.id)
             ).all()
         )
+        material_assets = list(
+            session.exec(
+                select(CourseAsset)
+                .where(CourseAsset.course_id == course_id)
+                .where(CourseAsset.role == CourseAssetRole.MATERIAL)
+            ).all()
+        )
+        shot_count = 0
+        for asset in material_assets:
+            if asset.mime_type.startswith("video/"):
+                shot_count += len(course_material_analysis.analyze_asset(session, asset.id))
+        session.refresh(recipe)
         return EditingRecipeRead(
             **recipe.model_dump(),
             rules=[EditingRuleRead.model_validate(rule) for rule in rules],
+            shot_count=shot_count,
         )
 
     @app.get("/api/tasks", response_model=list[TaskRead])
