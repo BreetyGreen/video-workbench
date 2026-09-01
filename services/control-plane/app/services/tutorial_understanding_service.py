@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,13 @@ class TutorialUnderstandingService:
     def __init__(self, transcriber: Any | None = None):
         self.transcriber = transcriber
 
-    def _segments(self, asset: CourseAsset) -> list[tuple[str, int | None, int | None, int]]:
+    def _segments(
+        self,
+        asset: CourseAsset,
+        *,
+        quality_profile: str,
+        cloud_processing_allowed: bool,
+    ) -> list[tuple[str, int | None, int | None, int, float]]:
         source = Path(asset.stored_path)
         if asset.mime_type == "text/plain":
             lines = source.read_text(encoding="utf-8-sig").splitlines()
@@ -52,23 +59,38 @@ class TutorialUnderstandingService:
                 match = TIME_RANGE.search(text)
                 start_ms = int(float(match.group("start")) * 1000) if match else None
                 end_ms = int(float(match.group("end")) * 1000) if match else None
-                result.append((text, start_ms, end_ms, line_number))
+                result.append((text, start_ms, end_ms, line_number, 1.0))
             return result
-        if asset.mime_type.startswith(("video/", "audio/")) and self.transcriber is not None:
-            transcript = self.transcriber.transcribe(source)
-            return [
-                (
-                    segment.text.strip(),
-                    int(segment.start_seconds * 1000),
-                    int(segment.end_seconds * 1000),
-                    index,
-                )
-                for index, segment in enumerate(transcript.segments, start=1)
-                if segment.text.strip()
-            ]
+        if asset.mime_type.startswith(("video/", "audio/")):
+            if self.transcriber is None:
+                raise ValueError("tutorial_transcriber_unavailable")
+            transcript = self.transcriber.transcribe(
+                source,
+                quality_profile=quality_profile,
+                cloud_processing_allowed=cloud_processing_allowed,
+            )
+            duration_ms = int(transcript.duration_seconds * 1000)
+            result = []
+            for index, segment in enumerate(transcript.segments, start=1):
+                text = segment.text.strip()
+                if not text:
+                    continue
+                start_ms = int(segment.start_seconds * 1000)
+                end_ms = int(segment.end_seconds * 1000)
+                if start_ms < 0 or end_ms <= start_ms or (duration_ms and end_ms > duration_ms):
+                    raise ValueError("tutorial_evidence_out_of_bounds")
+                result.append((text, start_ms, end_ms, index, segment.confidence))
+            return result
         return []
 
-    def process(self, session: Session, course_id: str) -> EditingRecipe:
+    def process(
+        self,
+        session: Session,
+        course_id: str,
+        *,
+        quality_profile: str = "production",
+        cloud_processing_allowed: bool = False,
+    ) -> EditingRecipe:
         course = session.get(Course, course_id)
         if course is None:
             raise ValueError("course_not_found")
@@ -88,6 +110,23 @@ class TutorialUnderstandingService:
         session.add_all([run, course])
         session.commit()
         try:
+            extracted: list[tuple[CourseAsset, str, int | None, int | None, int, float]] = []
+            transcript_parts: list[str] = []
+            for tutorial in tutorials:
+                segments = self._segments(
+                    tutorial,
+                    quality_profile=quality_profile,
+                    cloud_processing_allowed=cloud_processing_allowed,
+                )
+                for text, start_ms, end_ms, source_page, confidence in segments:
+                    if not text.strip():
+                        raise ValueError("tutorial_evidence_empty")
+                    if not 0 <= confidence <= 1:
+                        raise ValueError("tutorial_evidence_confidence_invalid")
+                    extracted.append((tutorial, text, start_ms, end_ms, source_page, confidence))
+                    transcript_parts.append(text.strip())
+            if not extracted:
+                raise ValueError("tutorial_text_not_extracted")
             existing = session.exec(
                 select(EditingRecipe)
                 .where(EditingRecipe.course_id == course_id)
@@ -98,27 +137,28 @@ class TutorialUnderstandingService:
                 version=(existing.version + 1) if existing else 1,
                 title=f"{course.title}剪辑规则",
                 summary="从课程教程中提取的、带原文位置引用的剪辑规则",
+                tutorial_asset_id=tutorials[0].id,
+                transcript_sha256=hashlib.sha256(" ".join(transcript_parts).encode("utf-8")).hexdigest(),
             )
             session.add(recipe)
             session.commit()
             order = 0
-            for tutorial in tutorials:
-                for text, start_ms, end_ms, source_page in self._segments(tutorial):
-                    order += 1
-                    session.add(
-                        EditingRule(
-                            recipe_id=recipe.id,
-                            category=_category(text),
-                            instruction=text,
-                            source_asset_id=tutorial.id,
-                            source_start_ms=start_ms,
-                            source_end_ms=end_ms,
-                            source_page=source_page,
-                            sort_order=order,
-                        )
+            for tutorial, text, start_ms, end_ms, source_page, confidence in extracted:
+                order += 1
+                session.add(
+                    EditingRule(
+                        recipe_id=recipe.id,
+                        category=_category(text),
+                        instruction=text,
+                        evidence_text=text,
+                        confidence=confidence,
+                        source_asset_id=tutorial.id,
+                        source_start_ms=start_ms,
+                        source_end_ms=end_ms,
+                        source_page=source_page,
+                        sort_order=order,
                     )
-            if order == 0:
-                raise ValueError("tutorial_text_not_extracted")
+                )
             run.state = "completed"
             run.finished_at = datetime.now(UTC)
             course.status = "processed"

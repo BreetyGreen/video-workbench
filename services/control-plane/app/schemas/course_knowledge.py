@@ -12,6 +12,8 @@ class EditingRuleRead(BaseModel):
     id: str
     category: str
     instruction: str
+    evidence_text: str
+    confidence: float
     source_asset_id: str
     source_start_ms: int | None
     source_end_ms: int | None
@@ -27,6 +29,8 @@ class EditingRecipeRead(BaseModel):
     version: int
     title: str
     summary: str
+    tutorial_asset_id: str | None
+    transcript_sha256: str
     created_at: datetime
     rules: list[EditingRuleRead]
     shot_count: int = 0

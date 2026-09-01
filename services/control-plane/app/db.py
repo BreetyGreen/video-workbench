@@ -31,6 +31,34 @@ class Database:
             for column, statement in additions.items():
                 if column not in existing:
                     connection.execute(text(statement))
+            recipe_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(editing_recipes)"))
+            }
+            recipe_additions = {
+                "tutorial_asset_id": "ALTER TABLE editing_recipes ADD COLUMN tutorial_asset_id VARCHAR",
+                "transcript_sha256": "ALTER TABLE editing_recipes ADD COLUMN transcript_sha256 VARCHAR NOT NULL DEFAULT ''",
+            }
+            for column, statement in recipe_additions.items():
+                if column not in recipe_existing:
+                    connection.execute(text(statement))
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_editing_recipes_tutorial_asset_id ON editing_recipes (tutorial_asset_id)")
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_editing_recipes_transcript_sha256 ON editing_recipes (transcript_sha256)")
+            )
+            rule_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(editing_rules)"))
+            }
+            rule_additions = {
+                "evidence_text": "ALTER TABLE editing_rules ADD COLUMN evidence_text VARCHAR NOT NULL DEFAULT ''",
+                "confidence": "ALTER TABLE editing_rules ADD COLUMN confidence FLOAT NOT NULL DEFAULT 1.0",
+            }
+            for column, statement in rule_additions.items():
+                if column not in rule_existing:
+                    connection.execute(text(statement))
             licensed_existing = {
                 row[1]
                 for row in connection.execute(text("PRAGMA table_info(licensed_assets)"))

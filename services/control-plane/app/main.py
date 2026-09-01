@@ -202,7 +202,9 @@ def create_app(
         app_settings.data_dir,
         app_settings.course_max_file_bytes,
     )
-    tutorial_understanding = TutorialUnderstandingService()
+    tutorial_understanding = TutorialUnderstandingService(
+        getattr(getattr(pipeline_service, "analyzer", None), "transcriber", None)
+    )
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
     course_material_search = CourseMaterialSearchService()
     course_edit_jobs = CourseEditJobService(app_settings, pipeline_service, jianying_handoff)

@@ -79,6 +79,8 @@ class EditingRecipe(SQLModel, table=True):
     version: int = 1
     title: str
     summary: str = ""
+    tutorial_asset_id: str | None = Field(default=None, foreign_key="course_assets.id", index=True)
+    transcript_sha256: str = Field(default="", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -89,6 +91,8 @@ class EditingRule(SQLModel, table=True):
     recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
     category: str = Field(index=True)
     instruction: str
+    evidence_text: str = ""
+    confidence: float = 1.0
     source_asset_id: str = Field(foreign_key="course_assets.id", index=True)
     source_start_ms: int | None = None
     source_end_ms: int | None = None

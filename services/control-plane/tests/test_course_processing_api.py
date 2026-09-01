@@ -50,6 +50,10 @@ def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Pat
     assert {rule["category"] for rule in result["rules"]} == {"hook", "pacing"}
     assert all(rule["source_asset_id"] for rule in result["rules"])
     assert all(rule["source_page"] for rule in result["rules"])
+    assert all(rule["evidence_text"] for rule in result["rules"])
+    assert all(0 <= rule["confidence"] <= 1 for rule in result["rules"])
+    assert result["tutorial_asset_id"]
+    assert len(result["transcript_sha256"]) == 64
     assert result["shot_count"] >= 1
     assert search.status_code == 200
     assert len(search.json()) >= 1
