@@ -62,14 +62,16 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-server.ps1 -SshTarget us
      --watch
    ```
 
-4. 助手无回显地要求配对码，换取只显示一次的设备令牌并保存到本机权限受限文件。服务器只存令牌 HMAC-SHA256 摘要。
-5. 之后助手只访问 `/api/devices/me/*` 专用接口，下载质量报告和草稿、执行 ZIP/媒体路径校验、新建草稿、启动剪映并回报结果。
+4. 助手无回显地要求配对码，换取只显示一次的设备令牌。Windows 使用当前用户 DPAPI 加密保存；macOS 保存到权限为 `0600` 的用户目录文件。服务器只存令牌 HMAC-SHA256 摘要。
+5. 之后助手只访问 `/api/devices/me/*` 专用接口。作业首次出队时原子绑定到该设备，其他设备不能查看、下载或回报；助手随后下载质量报告和草稿、执行 ZIP/媒体路径校验、新建草稿、启动剪映并回报结果。
 6. Caddy 只允许 `/api/devices/pair` 与 `/api/devices/me/*` 跳过网页 Basic Auth；这些接口本身分别由一次性码和设备 Bearer 令牌保护。`/api/devices/pairing-codes` 仍受管理员 Basic Auth 保护。
 
 ## 同步助手发布
 
 - 本地构建：Windows 运行 `sync-helper/build.ps1`，macOS 运行 `sync-helper/build.sh`。
-- 自动构建：推送 `sync-helper-v*` 标签后，`.github/workflows/sync-helper-release.yml` 在 `windows-latest` 和 `macos-14` 分别生成产物并发布到 GitHub Release。
+- 自动构建：推送 `sync-helper-v*` 标签后，`.github/workflows/sync-helper-release.yml` 在 `windows-latest` 和 `macos-14` 分别生成产物并上传到草稿 Release；完成签名、公证和实机验收后才手动公开。
 - Windows 安装器优先使用 B 盘；没有 B 盘时回退到当前用户的 `LOCALAPPDATA`，不会假设所有用户磁盘布局相同。
 - macOS 使用 `~/Applications`、`~/Library/Application Support` 和用户级 LaunchAgent，不要求管理员修改系统目录。
 - GitHub Actions 当前生成的是未签名构建。对外发布前必须补充 Authenticode 和 Apple Developer ID/公证；这一步需要仓库所有者提供签名身份，不能由代码自行伪造。
+
+当前部署实现是单工作区、单实例 SQLite 和同步作业执行，适合受控团队首发，不等同于多租户高并发 SaaS。扩展到公网多租户前，需要把任务执行拆到持久队列/worker，并使用独立数据库、对象存储和租户级设备路由。

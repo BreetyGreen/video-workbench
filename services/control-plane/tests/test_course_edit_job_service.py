@@ -52,6 +52,30 @@ class FakeHandoff:
         return {"task_id": task_id, "status": "imported", "draft_path": "B:/Jianying/Draft"}
 
 
+class MalformedQualityPipeline(FakePipeline):
+    def process(self, session: Session, task):
+        super().process(session, task)
+        (self.artifact_dir / task.id / "quality-report.json").write_text(
+            json.dumps({"status": "pass"}),
+            encoding="utf-8",
+        )
+        return task
+
+
+class PayloadQualityPipeline(FakePipeline):
+    def __init__(self, artifact_dir: Path, payload: dict):
+        super().__init__(artifact_dir)
+        self.payload = payload
+
+    def process(self, session: Session, task):
+        super().process(session, task)
+        (self.artifact_dir / task.id / "quality-report.json").write_text(
+            json.dumps(self.payload),
+            encoding="utf-8",
+        )
+        return task
+
+
 def _seed_course(session: Session, root: Path, *, rights: RightsStatus) -> Course:
     source = root / "courses" / "course-1" / "material.mp4"
     source.parent.mkdir(parents=True, exist_ok=True)
@@ -139,6 +163,46 @@ def test_commercial_course_job_rejects_unlicensed_material(tmp_path: Path) -> No
             )
 
 
+def test_personal_course_job_rejects_unknown_rights_and_accepts_personal_learning(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        unknown = _seed_course(session, settings.data_dir, rights=RightsStatus.UNKNOWN)
+        service = CourseEditJobService(settings, FakePipeline(settings.artifact_dir), FakeHandoff())
+        with pytest.raises(ValueError, match="personal_material_not_authorized"):
+            service.run(
+                session,
+                course_id=unknown.id,
+                title="个人练习",
+                content_type="教程",
+                commercial=False,
+            )
+
+    second_settings = Settings(
+        data_dir=tmp_path / "second-data",
+        database_url=f"sqlite:///{(tmp_path / 'second.db').as_posix()}",
+    )
+    second_database = Database(second_settings.database_url)
+    second_database.create_all()
+    with Session(second_database.engine) as session:
+        personal = _seed_course(session, second_settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        service = CourseEditJobService(second_settings, FakePipeline(second_settings.artifact_dir), FakeHandoff())
+        result = service.run(
+            session,
+            course_id=personal.id,
+            title="个人练习",
+            content_type="教程",
+            commercial=False,
+        )
+
+        assert result.state == "delivered_to_jianying"
+        assert result.task.rights_confirmed is True
+
+
 def test_quality_block_keeps_job_out_of_delivery(tmp_path: Path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
@@ -165,6 +229,82 @@ def test_quality_block_keeps_job_out_of_delivery(tmp_path: Path) -> None:
         assert job.state == "quality_blocked"
         assert job.review_skipped is False
         assert job.task.status == TaskStatus.REVIEWING
+
+
+def test_malformed_quality_report_never_auto_approves(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.COMMERCIAL_AUTHORIZED)
+        service = CourseEditJobService(settings, MalformedQualityPipeline(settings.artifact_dir), FakeHandoff())
+
+        with pytest.raises(ValueError, match="quality_report_missing_or_invalid"):
+            service.run(
+                session,
+                course_id=course.id,
+                title="夏日防晒帽",
+                content_type="商品介绍",
+                commercial=True,
+            )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "unknown", "blocking_failures": []},
+        {"status": "pass", "blocking_failures": "not-a-list"},
+    ],
+)
+def test_invalid_quality_report_shape_never_auto_approves(tmp_path: Path, payload: dict) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.COMMERCIAL_AUTHORIZED)
+        service = CourseEditJobService(settings, PayloadQualityPipeline(settings.artifact_dir, payload), FakeHandoff())
+
+        with pytest.raises(ValueError, match="quality_report_missing_or_invalid"):
+            service.run(
+                session,
+                course_id=course.id,
+                title="夏日防晒帽",
+                content_type="商品介绍",
+                commercial=True,
+            )
+
+
+def test_fail_quality_status_blocks_even_when_blocker_list_is_empty(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.COMMERCIAL_AUTHORIZED)
+        service = CourseEditJobService(
+            settings,
+            PayloadQualityPipeline(settings.artifact_dir, {"status": "fail", "blocking_failures": []}),
+            FakeHandoff(),
+        )
+
+        result = service.run(
+            session,
+            course_id=course.id,
+            title="夏日防晒帽",
+            content_type="商品介绍",
+            commercial=True,
+        )
+
+        assert result.state == "quality_blocked"
+        assert result.review_skipped is False
 
 
 def test_course_edit_job_api_returns_automatic_delivery_state(tmp_path: Path) -> None:

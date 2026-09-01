@@ -46,9 +46,9 @@ macOS 详细说明与故障定位见 [macOS 本地运行手册](docs/runbooks/ma
 
 ## 不依赖 Codex 的服务器课程模式
 
-Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 Apple Silicon Mac 产物并挂到 Release：
+Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 macOS 产物并挂到 Release：
 
-- 下载入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>
+- 已签名发布包入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>。CI 先创建草稿 Release，签名与验收完成后才由维护者公开。
 - Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，优先安装到 B 盘，其他电脑自动使用用户本地应用目录，并注册登录自启。
 - macOS：`VideoWorkbenchSync` + `install-macos.sh` + LaunchAgent，安装到用户目录并登录自启。
 

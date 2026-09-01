@@ -62,6 +62,7 @@ class CourseEditJobRead(BaseModel):
     course_id: str
     recipe_id: str
     task_id: str | None
+    device_id: str | None
     state: str
     commercial: bool
     quality_status: str

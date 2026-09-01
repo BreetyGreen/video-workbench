@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
 from sqlmodel import Session
@@ -39,3 +41,27 @@ def test_expired_pairing_code_is_rejected(tmp_path) -> None:
 
         with pytest.raises(ValueError, match="pairing_code_expired"):
             service.pair(session, code=issued.code, name="MacBook")
+
+
+def test_concurrent_pairing_code_consumption_creates_only_one_device(tmp_path) -> None:
+    database = Database(f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}")
+    database.create_all()
+    service = DeviceDeliveryService("test-master-secret")
+    with Session(database.engine) as session:
+        issued = service.issue_code(session)
+    barrier = Barrier(2)
+
+    def pair(name: str) -> str:
+        with Session(database.engine) as session:
+            barrier.wait()
+            try:
+                service.pair(session, code=issued.code, name=name)
+                return "paired"
+            except ValueError as error:
+                return str(error)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(pair, ["first", "second"]))
+
+    assert results.count("paired") == 1
+    assert results.count("pairing_code_already_used") == 1

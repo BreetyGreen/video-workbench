@@ -133,6 +133,7 @@ class CourseEditJob(SQLModel, table=True):
     course_id: str = Field(foreign_key="courses.id", index=True)
     recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
     task_id: str | None = Field(default=None, foreign_key="video_tasks.id", index=True)
+    device_id: str | None = Field(default=None, foreign_key="delivery_devices.id", index=True)
     state: str = Field(default="queued", index=True)
     commercial: bool = True
     quality_status: str = "pending"

@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.adapters.dify import DifyClient
@@ -1064,10 +1065,18 @@ def create_app(
         limit: int = 20,
         session: Session = Depends(session_dependency),
     ) -> list[CourseEditJobRead]:
-        authenticated_device(request, session)
+        device = authenticated_device(request, session)
+        session.exec(
+            update(CourseEditJob)
+            .where(CourseEditJob.state == "awaiting_device")
+            .where(CourseEditJob.device_id.is_(None))
+            .values(device_id=device.id, updated_at=datetime.now(UTC))
+        )
+        session.commit()
         statement = (
             select(CourseEditJob)
-            .where(CourseEditJob.state == "awaiting_device")
+            .where(CourseEditJob.state.in_({"awaiting_device", "handoff_failed"}))
+            .where(CourseEditJob.device_id == device.id)
             .order_by(CourseEditJob.created_at)
             .limit(min(max(limit, 1), 100))
         )
@@ -1080,9 +1089,14 @@ def create_app(
         request: Request,
         session: Session = Depends(session_dependency),
     ) -> FileResponse:
-        authenticated_device(request, session)
+        device = authenticated_device(request, session)
         job = session.get(CourseEditJob, job_id)
-        if job is None or not job.task_id or job.state not in {"awaiting_device", "handoff_failed"}:
+        if (
+            job is None
+            or job.device_id != device.id
+            or not job.task_id
+            or job.state not in {"awaiting_device", "handoff_failed"}
+        ):
             raise HTTPException(status_code=404, detail={"code": "device_delivery_not_found"})
         if artifact_name not in {"draft.zip", "quality-report.json"}:
             raise HTTPException(status_code=404, detail={"code": "artifact_not_found"})
@@ -1099,11 +1113,13 @@ def create_app(
         request: Request,
         session: Session = Depends(session_dependency),
     ) -> CourseEditJobRead:
-        authenticated_device(request, session)
+        device = authenticated_device(request, session)
         job = session.get(CourseEditJob, job_id)
-        if job is None:
+        if job is None or job.device_id != device.id:
             raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
-        if job.state not in {"awaiting_device", "handoff_failed", "delivered_to_jianying"}:
+        if job.state == "delivered_to_jianying" and update.status == "imported":
+            return CourseEditJobRead.model_validate(job)
+        if job.state not in {"awaiting_device", "handoff_failed"}:
             raise HTTPException(status_code=409, detail={"code": "job_not_awaiting_device"})
         job.handoff_status = update.status
         job.state = "delivered_to_jianying" if update.status == "imported" else "handoff_failed"

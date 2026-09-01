@@ -85,12 +85,14 @@ class CourseEditJobService:
                 .where(CourseAsset.mime_type.startswith("video/"))
             ).all()
         )
-        if commercial:
-            assets = [item for item in assets if item.rights_status == RightsStatus.COMMERCIAL_AUTHORIZED]
-            if not assets:
-                raise ValueError("commercial_material_not_authorized")
-        elif not assets:
-            raise ValueError("course_materials_required")
+        allowed_rights = (
+            {RightsStatus.COMMERCIAL_AUTHORIZED}
+            if commercial
+            else {RightsStatus.PERSONAL_LEARNING, RightsStatus.COMMERCIAL_AUTHORIZED}
+        )
+        assets = [item for item in assets if item.rights_status in allowed_rights]
+        if not assets:
+            raise ValueError("commercial_material_not_authorized" if commercial else "personal_material_not_authorized")
 
         rules = list(
             session.exec(
@@ -137,8 +139,12 @@ class CourseEditJobService:
 
             self.pipeline.process(session, task)
             quality = self._read_quality(task.id)
-            job.quality_status = str(quality.get("status") or "unknown")
-            if quality.get("blocking_failures"):
+            quality_status = quality.get("status")
+            blocking_failures = quality.get("blocking_failures")
+            if quality_status not in {"pass", "warn", "fail"} or not isinstance(blocking_failures, list):
+                raise ValueError("quality_report_missing_or_invalid")
+            job.quality_status = quality_status
+            if quality_status == "fail" or blocking_failures:
                 job.state = "quality_blocked"
                 job.review_skipped = False
                 job.updated_at = datetime.now(UTC)

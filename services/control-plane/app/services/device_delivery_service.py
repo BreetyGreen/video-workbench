@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import secrets
 
+from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.models import DeliveryDevice, DevicePairingCode
@@ -44,22 +45,28 @@ class DeviceDeliveryService:
         return IssuedPairingCode(id=record.id, code=code, expires_at=expires_at)
 
     def pair(self, session: Session, *, code: str, name: str) -> PairedDevice:
-        record = session.exec(
-            select(DevicePairingCode).where(DevicePairingCode.code_hash == self._digest(code.strip()))
-        ).first()
-        if record is None:
-            raise ValueError("pairing_code_invalid")
-        if record.used_at is not None:
-            raise ValueError("pairing_code_already_used")
+        code_hash = self._digest(code.strip())
         now = datetime.now(UTC)
-        comparable_now = now if record.expires_at.tzinfo else now.replace(tzinfo=None)
-        if record.expires_at <= comparable_now:
+        result = session.exec(
+            update(DevicePairingCode)
+            .where(DevicePairingCode.code_hash == code_hash)
+            .where(DevicePairingCode.used_at.is_(None))
+            .where(DevicePairingCode.expires_at > now)
+            .values(used_at=now)
+        )
+        if result.rowcount != 1:
+            session.rollback()
+            record = session.exec(
+                select(DevicePairingCode).where(DevicePairingCode.code_hash == code_hash)
+            ).first()
+            if record is None:
+                raise ValueError("pairing_code_invalid")
+            if record.used_at is not None:
+                raise ValueError("pairing_code_already_used")
             raise ValueError("pairing_code_expired")
 
         token = secrets.token_urlsafe(32)
         device = DeliveryDevice(name=name.strip()[:100] or "VideoWorkbench Device", token_hash=self._digest(token))
-        record.used_at = now
-        session.add(record)
         session.add(device)
         session.commit()
         session.refresh(device)

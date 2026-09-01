@@ -44,6 +44,13 @@ class Database:
             for column, statement in licensed_additions.items():
                 if column not in licensed_existing:
                     connection.execute(text(statement))
+            course_job_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(course_edit_jobs)"))
+            }
+            if "device_id" not in course_job_existing:
+                connection.execute(text("ALTER TABLE course_edit_jobs ADD COLUMN device_id VARCHAR"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_course_edit_jobs_device_id ON course_edit_jobs (device_id)"))
 
     def session(self) -> Iterator[Session]:
         with Session(self.engine) as session:

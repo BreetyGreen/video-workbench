@@ -3,7 +3,8 @@ set -eu
 if [ "$#" -ne 1 ]; then echo "Usage: $0 https://server.example.com" >&2; exit 2; fi
 case "$1" in https://*) ;; *) echo 'HTTPS server URL required.' >&2; exit 2;; esac
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SOURCE="$ROOT/dist/VideoWorkbenchSync"
+SOURCE="$ROOT/VideoWorkbenchSync"
+[ -f "$SOURCE" ] || SOURCE="$ROOT/dist/VideoWorkbenchSync"
 [ -f "$SOURCE" ] || { echo 'Build VideoWorkbenchSync first.' >&2; exit 2; }
 INSTALL="$HOME/Applications/VideoWorkbenchSync"
 DATA="$HOME/Library/Application Support/VideoWorkbench Sync"

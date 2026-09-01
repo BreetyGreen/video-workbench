@@ -245,9 +245,9 @@ python scripts/sync-jianying-device.py \
   --data-dir "$HOME/Library/Application Support/VideoWorkbench Sync"
 ```
 
-持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码，成功后只把设备令牌保存到本机运行目录的权限受限文件；也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。
+持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码；Windows 用当前用户 DPAPI 加密保存设备令牌，macOS 保存到权限为 `0600` 的用户目录文件。也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。
 
-当前仓库已经完成单次配对、令牌哈希存储、设备专用队列、下载、导入、剪映启动、结果回报、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
+当前仓库已经完成原子单次配对、令牌哈希存储、作业到设备的原子认领与隔离、下载、导入、剪映启动、幂等结果回报、退避重试、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
 
 ### remote-deployment：服务器、域名和 HTTPS
 

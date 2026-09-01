@@ -33,7 +33,7 @@ def test_setup_page_contains_local_first_flow(client: TestClient):
     assert 'id="setup-capability-list"' in page.text
     assert 'id="create-device-pairing-code"' in page.text
     assert 'id="device-pairing-result"' in page.text
-    assert "下载 Mac / Windows 同步助手" in page.text
+    assert "查看已签名 Mac / Windows 发布包" in page.text
     assert 'id="confirm-local-mode"' in page.text
     assert 'aria-label="首次启动进度"' in page.text
     assert 'href="/"' in page.text

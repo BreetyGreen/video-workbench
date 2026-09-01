@@ -220,7 +220,7 @@ def create_task_from_course_assets(
     task = VideoTask(
         title=title.strip(),
         content_type=content_type.strip(),
-        rights_confirmed=commercial,
+        rights_confirmed=True,
         source_type="course_automation",
     )
     task.brief = TaskBrief(
