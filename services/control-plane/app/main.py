@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.adapters.dify import DifyClient
 from app.adapters.douyin import DouyinSearchClient
@@ -28,7 +28,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAssetRole, LicensedAsset, RightsStatus, TaskStatus
+from app.models import CourseAssetRole, EditingRule, LicensedAsset, RightsStatus, TaskStatus
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -52,6 +52,7 @@ from app.schemas.automation import (
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
 from app.schemas.courses import CourseAssetRead, CourseRead
+from app.schemas.course_knowledge import EditingRecipeRead, EditingRuleRead
 from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
@@ -86,6 +87,7 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.jianying_runtime_service import JianyingRuntimeService
 from app.services.jianying_handoff_service import JianyingHandoffService
 from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
+from app.services.tutorial_understanding_service import TutorialUnderstandingService
 logger = logging.getLogger(__name__)
 
 
@@ -181,6 +183,7 @@ def create_app(
         app_settings.data_dir,
         app_settings.course_max_file_bytes,
     )
+    tutorial_understanding = TutorialUnderstandingService()
 
     def course_read(course, assets) -> CourseRead:
         return CourseRead(
@@ -888,6 +891,29 @@ def create_app(
         if result is None:
             raise HTTPException(status_code=404, detail={"code": "course_not_found"})
         return course_read(*result)
+
+    @app.post("/api/courses/{course_id}/process", response_model=EditingRecipeRead)
+    def process_course(
+        course_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> EditingRecipeRead:
+        try:
+            recipe = tutorial_understanding.process(session, course_id)
+        except ValueError as error:
+            code = str(error)
+            status_code = 404 if code == "course_not_found" else 422
+            raise HTTPException(status_code=status_code, detail={"code": code}) from error
+        rules = list(
+            session.exec(
+                select(EditingRule)
+                .where(EditingRule.recipe_id == recipe.id)
+                .order_by(EditingRule.sort_order, EditingRule.id)
+            ).all()
+        )
+        return EditingRecipeRead(
+            **recipe.model_dump(),
+            rules=[EditingRuleRead.model_validate(rule) for rule in rules],
+        )
 
     @app.get("/api/tasks", response_model=list[TaskRead])
     def read_tasks(
