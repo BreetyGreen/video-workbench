@@ -38,6 +38,10 @@ def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Pat
         ).json()
 
         response = client.post(f"/api/courses/{created['id']}/process")
+        search = client.get(
+            f"/api/courses/{created['id']}/shots/search",
+            params={"q": "material", "commercial": "true"},
+        )
 
     assert response.status_code == 200, response.text
     result = response.json()
@@ -47,3 +51,6 @@ def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Pat
     assert all(rule["source_asset_id"] for rule in result["rules"])
     assert all(rule["source_page"] for rule in result["rules"])
     assert result["shot_count"] >= 1
+    assert search.status_code == 200
+    assert len(search.json()) >= 1
+    assert all(item["rights_status"] == "commercial_authorized" for item in search.json())

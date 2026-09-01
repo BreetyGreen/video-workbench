@@ -29,3 +29,17 @@ class EditingRecipeRead(BaseModel):
     created_at: datetime
     rules: list[EditingRuleRead]
     shot_count: int = 0
+
+
+class ShotSearchResultRead(BaseModel):
+    shot_id: str
+    asset_id: str
+    original_name: str
+    start_ms: int
+    end_ms: int
+    thumbnail_path: str
+    rights_status: str
+    text_score: float
+    semantic_score: float
+    duplicate_score: float
+    combined_score: float

@@ -52,7 +52,7 @@ from app.schemas.automation import (
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
 from app.schemas.courses import CourseAssetRead, CourseRead
-from app.schemas.course_knowledge import EditingRecipeRead, EditingRuleRead
+from app.schemas.course_knowledge import EditingRecipeRead, EditingRuleRead, ShotSearchResultRead
 from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
@@ -89,6 +89,7 @@ from app.services.jianying_handoff_service import JianyingHandoffService
 from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
 from app.services.tutorial_understanding_service import TutorialUnderstandingService
 from app.services.course_material_analysis_service import CourseMaterialAnalysisService
+from app.services.course_material_search_service import CourseMaterialSearchService
 logger = logging.getLogger(__name__)
 
 
@@ -186,6 +187,7 @@ def create_app(
     )
     tutorial_understanding = TutorialUnderstandingService()
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
+    course_material_search = CourseMaterialSearchService()
 
     def course_read(course, assets) -> CourseRead:
         return CourseRead(
@@ -929,6 +931,23 @@ def create_app(
             rules=[EditingRuleRead.model_validate(rule) for rule in rules],
             shot_count=shot_count,
         )
+
+    @app.get("/api/courses/{course_id}/shots/search", response_model=list[ShotSearchResultRead])
+    def search_course_shots(
+        course_id: str,
+        q: str = "",
+        commercial: bool = False,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[ShotSearchResultRead]:
+        results = course_material_search.search(
+            session,
+            course_id,
+            q,
+            commercial=commercial,
+            limit=limit,
+        )
+        return [ShotSearchResultRead(**result.__dict__) for result in results]
 
     @app.get("/api/tasks", response_model=list[TaskRead])
     def read_tasks(
