@@ -128,8 +128,13 @@ class TimelinePlanner:
                         )
                     )
             for scene in analysis.scenes:
+                safe_scene_start = scene.start_seconds
+                if scene.start_seconds <= 0.05 and scene.end_seconds - scene.start_seconds < 0.8:
+                    continue
+                if scene.start_seconds <= 0.05 and scene.end_seconds - scene.start_seconds >= 1.1:
+                    safe_scene_start = min(scene.end_seconds - 0.3, 0.8)
                 for start, end in _split_interval(
-                    scene.start_seconds,
+                    safe_scene_start,
                     scene.end_seconds,
                     maximum_seconds=maximum_clip_seconds,
                 ):
@@ -139,7 +144,13 @@ class TimelinePlanner:
                         start=start,
                         end=end,
                         score=1 + visual + scene.score + (0.75 if start < 8 else 0),
-                        reason="visual:scene_change" if scene.start_seconds > 0 else "visual:opening",
+                        reason=(
+                            "visual:scene_change"
+                            if scene.start_seconds > 0
+                            else "visual:opening_trimmed"
+                            if safe_scene_start > scene.start_seconds
+                            else "visual:opening"
+                        ),
                         has_audio=analysis.has_audio,
                     )
                     if not any(_overlap_ratio(candidate, existing) > 0.8 for existing in candidates):
@@ -160,7 +171,11 @@ class TimelinePlanner:
     ) -> EditingTimeline:
         if not analyses:
             raise ValueError("At least one media analysis is required")
-        requested = float(recipe.target_duration_seconds) if recipe is not None else target_seconds
+        requested = (
+            min(float(recipe.target_duration_seconds), target_seconds)
+            if recipe is not None
+            else target_seconds
+        )
         target = min(max(0.3, requested), self.max_automatic_seconds)
         maximum_clip_seconds = (
             reference_brief.pacing.preferred_clip_seconds if reference_brief else 3

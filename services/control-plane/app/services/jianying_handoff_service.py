@@ -81,7 +81,12 @@ class JianyingHandoffService:
                 return self._save(task_id, {"status": "failed", "code": "draft_info_missing"})
             destination = self._unique_destination(container_root, top, task_id)
             host_destination = self._join_host_path(str(runtime["draft_root"]), destination.name)
-            source_prefix = f"/data/artifacts/{task_id}/drafts/{top}"
+            native_source = (self.artifact_dir / task_id / "drafts" / top).resolve()
+            source_prefixes = {
+                f"/data/artifacts/{task_id}/drafts/{top}",
+                str(native_source),
+                native_source.as_posix(),
+            }
             rewritten = 0
             for name in ("draft_info.json", "draft_content.json", "draft_meta_info.json"):
                 path = source / name
@@ -89,8 +94,9 @@ class JianyingHandoffService:
                     document = self._read_json(path)
                     if document is None:
                         raise ValueError(f"invalid_{name}")
-                    document, count = self._replace_strings(document, source_prefix, host_destination)
-                    rewritten += count
+                    for source_prefix in source_prefixes:
+                        document, count = self._replace_strings(document, source_prefix, host_destination)
+                        rewritten += count
                     path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
             self._validate_media_paths(source / "draft_info.json", source, host_destination)
             source.replace(destination)

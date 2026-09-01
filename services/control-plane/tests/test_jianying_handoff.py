@@ -8,7 +8,7 @@ from app.services.jianying_handoff_service import JianyingHandoffService
 from app.services.jianying_runtime_service import JianyingRuntimeService
 
 
-def _write_manifest(data_dir: Path, draft_root: Path) -> None:
+def _write_manifest(data_dir: Path, draft_root: Path, *, host_draft_root: Path | None = None) -> None:
     runtime = data_dir / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
     (runtime / "jianying.json").write_text(
@@ -17,7 +17,7 @@ def _write_manifest(data_dir: Path, draft_root: Path) -> None:
                 "platform": "Windows",
                 "installed": True,
                 "app_path": "B:\\Apps\\JianyingPro\\JianyingPro.exe",
-                "draft_root": "B:\\JianyingData\\Drafts\\JianyingPro Drafts",
+                "draft_root": str(host_draft_root or draft_root),
                 "container_draft_root": str(draft_root),
                 "draft_root_writable": True,
                 "checked_at": "2026-08-31T12:00:00Z",
@@ -27,12 +27,22 @@ def _write_manifest(data_dir: Path, draft_root: Path) -> None:
     )
 
 
-def _write_package(artifact_dir: Path, task_id: str, *, unsafe: bool = False) -> Path:
+def _write_package(
+    artifact_dir: Path,
+    task_id: str,
+    *,
+    unsafe: bool = False,
+    local_paths: bool = False,
+) -> Path:
     task_dir = artifact_dir / task_id
     task_dir.mkdir(parents=True)
     top = "帽子商品草稿"
     package = task_dir / "draft.zip"
-    source_prefix = f"/data/artifacts/{task_id}/drafts/{top}"
+    source_prefix = (
+        str((task_dir / "drafts" / top).resolve())
+        if local_paths
+        else f"/data/artifacts/{task_id}/drafts/{top}"
+    )
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr(
             f"{top}/draft_info.json",
@@ -75,6 +85,24 @@ def test_runtime_manifest_wins_over_container_platform(tmp_path: Path):
     assert snapshot["container_draft_root"] == str(draft_root)
 
 
+def test_native_runtime_uses_host_draft_root_when_container_mount_is_absent(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    host_draft_root = tmp_path / "host-drafts"
+    host_draft_root.mkdir()
+    missing_container_root = tmp_path / "missing-container-mount"
+    _write_manifest(
+        data_dir,
+        missing_container_root,
+        host_draft_root=host_draft_root,
+    )
+
+    snapshot = JianyingRuntimeService(data_dir).snapshot()
+
+    assert snapshot["ready_for_auto_import"] is True
+    assert snapshot["container_draft_root"] == str(host_draft_root)
+    assert snapshot["source"] == "host_manifest_native"
+
+
 def test_imports_rewrites_and_is_idempotent(tmp_path: Path):
     data_dir = tmp_path / "data"
     artifact_dir = data_dir / "artifacts"
@@ -94,7 +122,7 @@ def test_imports_rewrites_and_is_idempotent(tmp_path: Path):
     assert first["draft_path"] == second["draft_path"]
     assert Path(first["container_draft_path"]).is_dir()
     draft_info = json.loads((Path(first["container_draft_path"]) / "draft_info.json").read_text(encoding="utf-8"))
-    assert draft_info["materials"]["videos"][0]["path"].startswith("B:\\JianyingData")
+    assert draft_info["materials"]["videos"][0]["path"].startswith(str(draft_root))
     request = data_dir / "runtime" / "open-requests" / f"{task_id}.json"
     assert request.is_file()
     review = json.loads((artifact_dir / task_id / "review.json").read_text(encoding="utf-8"))
@@ -117,3 +145,23 @@ def test_rejects_zip_slip(tmp_path: Path):
     assert result["status"] == "failed"
     assert result["code"] == "unsafe_archive_path"
     assert not (tmp_path / "escape.txt").exists()
+
+
+def test_import_rewrites_native_artifact_paths_into_the_draft(tmp_path: Path):
+    data_dir = tmp_path / "data"
+    artifact_dir = data_dir / "artifacts"
+    draft_root = tmp_path / "drafts"
+    draft_root.mkdir()
+    task_id = "05753740-7a36-41d0-b406-c8034d96b712"
+    _write_manifest(data_dir, draft_root)
+    _write_package(artifact_dir, task_id, local_paths=True)
+    service = JianyingHandoffService(data_dir, artifact_dir, JianyingRuntimeService(data_dir))
+
+    result = service.import_task(task_id)
+
+    assert result["status"] == "imported"
+    assert result["rewritten_paths"] == 1
+    imported = Path(result["container_draft_path"])
+    draft_info = json.loads((imported / "draft_info.json").read_text(encoding="utf-8"))
+    media_path = draft_info["materials"]["videos"][0]["path"]
+    assert media_path.startswith(result["draft_path"])

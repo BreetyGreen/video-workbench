@@ -2,6 +2,23 @@
 
 最后更新：2026-09-01
 
+## 2026-09-01 教学视频理解到剪映真实闭环
+
+### Confirmed
+
+- 新增可重复的一键教学演示：独立教学视频生成、真实 ASR、时间码规则抽取、独立授权素材准备、基线/规则时间线对比、渲染、质量门禁和剪映交付均由同一运行记录串联。
+- 教程规则保存原文证据、起止时间、置信度和转写 SHA-256；最终镜头保存命中的规则 ID，并生成 `course-rule-trace.json` 与 `course-comparison.json`。规则未造成至少两项可观察剪辑变化时以 `course_rules_not_applied` 失败。
+- 真实演示运行 `4245416a-20ed-4c5c-afdc-324a0a2c2427` 完成；教程由火山 BigASR `volc.bigasr.auc_turbo` 转写为 8 个分段并抽取 9 条规则。规则实际改变了平均镜头时长、镜头数量和 CTA 结尾，共留下 3 条命中追踪。
+- 成片任务 `05753740-7a36-41d0-b406-c8034d96b712` 为 1080×1920、H.264/AAC、20.8 秒；黑场、长静音、画布、音视频流、时长和字幕等阻断项全部通过。
+- 演示素材账本锁定两条 Wikimedia Commons 视频的来源、许可与 SHA-256；教学画面没有进入最终成片。
+- Windows 本机直跑现在会区分宿主草稿目录与 Docker 挂载目录。上述任务已导入 `B:\JianyingData\Drafts\JianyingPro Drafts\宠物护理前后对比-5285d6a9-05753740`，15 个文件齐全、11 条媒体引用可读取，打开请求为 `launched`，作业状态为 `delivered_to_jianying`。
+
+### Open / External user action
+
+- 本轮真实教程 ASR 使用了当前机器已配置的 BigASR；fresh clone 在零 Key 条件下会使用本地 Whisper，首次需要联网下载模型。零 Key路径由自动化测试覆盖，但本轮没有在一台全新离线 Mac 上重复下载模型。
+- Windows 剪映已被真实拉起；最终画面、字体与当前剪映版本兼容性仍应由人在客户端看一遍。macOS 的 Finder/CapCut/剪映草稿路径、Gatekeeper、签名与公证仍需 Apple 机器或 CI 产物实机验收。
+- 当前改动位于 `codex/video-workbench-closure` 工作树；在合并并推送到远端默认分支之前，外部用户 clone 公共仓库不会自动获得本轮最新闭环。
+
 ## 2026-09-01 课程自动剪辑与服务器到剪映闭环
 
 ### Confirmed

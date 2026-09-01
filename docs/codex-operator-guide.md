@@ -135,6 +135,9 @@ python scripts/verify-fresh-clone.py --dry-run
 
 - `POST /api/courses/intake` 接收教程、案例和素材；`POST /api/courses/{id}/process` 生成带来源引用的规则并切分素材镜头。
 - `POST /api/course-edit-jobs` 使用最新规则和已授权课程视频执行真实剪辑。商用任务只接受 `commercial_authorized` 素材。
+- `POST /api/tutorial-learning-demo` 启动可重复的完整验收，`GET /api/tutorial-learning-demo/{run_id}` 读取阶段、错误、任务与证据链接。不要同步阻塞 HTTP 请求等待渲染；轮询到 `completed` 或 `failed`。
+- 验收必须检查教程 ASR 提供方、带时间码规则、`course-rule-trace.json`、`course-comparison.json`、`quality-report.json` 和最终媒体探测；只看到转写文本或一张图片不算通过。
+- 演示的教学画面与被剪素材必须不同；素材账本必须保留来源、许可链接、SHA-256 和下载回退信息。
 - 质量门禁通过后任务自动批准；失败仍停在诊断状态，不会交付半成品。
 - 服务器没有本机剪映目录时，作业进入 `awaiting_device`。管理员通过 `POST /api/devices/pairing-codes` 生成十分钟有效的一次性码；Mac/Windows 首次运行同步助手时输入一次，之后使用哈希验证的设备令牌领取草稿、新建工程、启动剪映并回报完成。
 - 同步助手运行时不需要 Codex；生产服务器必须使用 HTTPS 和访问控制，不能把裸 API 暴露到公网。

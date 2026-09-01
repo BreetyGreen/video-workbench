@@ -32,6 +32,16 @@ KEYWORD_VOCABULARY = (
     "收藏",
 )
 SECONDS = re.compile(r"(?P<seconds>\d+(?:\.\d+)?)\s*秒")
+CHINESE_SECONDS = {
+    "零点八秒": 0.8,
+    "一秒": 1.0,
+    "一点二秒": 1.2,
+    "一点五秒": 1.5,
+    "二秒": 2.0,
+    "两秒": 2.0,
+    "二点五秒": 2.5,
+    "三秒": 3.0,
+}
 
 
 @dataclass(frozen=True)
@@ -94,6 +104,9 @@ class CourseRecipeService:
             compiled.append(current)
             if rule.category == "pacing":
                 matches = [float(match.group("seconds")) for match in SECONDS.finditer(rule.instruction)]
+                matches.extend(
+                    seconds for phrase, seconds in CHINESE_SECONDS.items() if phrase in rule.instruction
+                )
                 if matches:
                     candidate = min(matches)
                     if 0.3 <= candidate <= 10:

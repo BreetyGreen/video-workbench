@@ -18,16 +18,29 @@ class JianyingRuntimeService:
     def snapshot(self) -> dict[str, Any]:
         manifest = self._read_manifest()
         if manifest is not None:
-            container_root = Path(str(manifest.get("container_draft_root") or ""))
+            current_platform = platform.system()
+            manifest_platform = str(manifest.get("platform") or "")
+            host_root_value = str(manifest.get("draft_root") or "")
+            container_root_value = str(manifest.get("container_draft_root") or "")
+            native_runtime = bool(
+                host_root_value
+                and manifest_platform.casefold() == current_platform.casefold()
+            )
+            effective_root_value = host_root_value if native_runtime else container_root_value
+            effective_root = Path(effective_root_value) if effective_root_value else None
             installed = bool(manifest.get("installed"))
-            writable = bool(manifest.get("draft_root_writable")) and container_root.is_dir()
+            writable = bool(
+                manifest.get("draft_root_writable")
+                and effective_root is not None
+                and effective_root.is_dir()
+            )
             return {
                 **manifest,
                 "installed": installed,
-                "container_draft_root": str(container_root) if str(container_root) else None,
-                "ready_for_auto_import": installed and writable and bool(manifest.get("draft_root")),
-                "needs_user_action": not (installed and writable and bool(manifest.get("draft_root"))),
-                "source": "host_manifest",
+                "container_draft_root": str(effective_root) if effective_root else None,
+                "ready_for_auto_import": installed and writable and bool(host_root_value),
+                "needs_user_action": not (installed and writable and bool(host_root_value)),
+                "source": "host_manifest_native" if native_runtime else "host_manifest",
             }
 
         system = platform.system()

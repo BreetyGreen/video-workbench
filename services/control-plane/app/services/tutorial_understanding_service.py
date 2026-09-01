@@ -19,6 +19,7 @@ from app.models import (
 
 
 TIME_RANGE = re.compile(r"(?P<start>\d+(?:\.\d+)?)\s*[-—~至]\s*(?P<end>\d+(?:\.\d+)?)\s*秒")
+SENTENCE_BREAK = re.compile(r"[。！？；.!?]+")
 
 
 def _category(text: str) -> str:
@@ -87,7 +88,25 @@ class TutorialUnderstandingService:
                 end_ms = int(segment.end_seconds * 1000)
                 if start_ms < 0 or end_ms <= start_ms or (duration_ms and end_ms > duration_ms):
                     raise ValueError("tutorial_evidence_out_of_bounds")
-                result.append((text, start_ms, end_ms, index, segment.confidence))
+                sentences = [item.strip() for item in SENTENCE_BREAK.split(text) if item.strip()] or [text]
+                total_characters = sum(len(item) for item in sentences)
+                cursor = start_ms
+                for sentence_index, sentence in enumerate(sentences, start=1):
+                    if sentence_index == len(sentences):
+                        sentence_end = end_ms
+                    else:
+                        ratio = len(sentence) / max(1, total_characters)
+                        sentence_end = min(end_ms, cursor + max(1, round((end_ms - start_ms) * ratio)))
+                    result.append(
+                        (
+                            sentence,
+                            cursor,
+                            sentence_end,
+                            index * 1000 + sentence_index,
+                            segment.confidence,
+                        )
+                    )
+                    cursor = sentence_end
             return result
         return []
 

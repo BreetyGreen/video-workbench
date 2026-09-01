@@ -708,12 +708,15 @@ class PipelineService:
             encoding="utf-8",
         )
         evidence.append(f"音频路由：{audio_decision.mode}；{audio_decision.reason}")
+        final_target_seconds = target_seconds
+        if audio_decision.voiceover_path and audio_decision.voiceover_duration_seconds > 0:
+            final_target_seconds = min(target_seconds, audio_decision.voiceover_duration_seconds)
         baseline_timeline = None
         if course_policy is not None:
             baseline_timeline = self.planner.plan(
                 analyses,
                 title=task.title,
-                target_seconds=target_seconds,
+                target_seconds=final_target_seconds,
                 recipe=recipe,
                 bgm_path=audio.stored_path if audio else None,
                 reference_brief=reference_brief,
@@ -722,7 +725,7 @@ class PipelineService:
         timeline = self.planner.plan(
             analyses,
             title=task.title,
-            target_seconds=target_seconds,
+            target_seconds=final_target_seconds,
             recipe=recipe,
             bgm_path=audio.stored_path if audio else None,
             reference_brief=reference_brief,

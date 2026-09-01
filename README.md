@@ -16,6 +16,8 @@ bash scripts/bootstrap.sh
 
 启动后浏览器进入 <http://127.0.0.1:8130/>。首次访问会显示可跳过的使用引导：可以点“先直接创作”立即使用零 Key 本地剪辑，也可以点“打开配置助手”检查 FFmpeg、本地目录、剪映位置并按需连接云服务。配置助手地址是 <http://127.0.0.1:8130/setup>，以后也始终可以从侧栏重新打开。
 
+想先验证“看教程再剪辑”是否真的生效，可以在配置助手点击“运行完整教学演示”。该演示会生成一条有真实语音的竖屏教学视频，转写并提取带时间码证据的剪辑规则，再用两条许可明确、与教程画面不同的公开视频完成剪辑；结果页同时提供基线时间线、规则时间线、差异报告、质量报告和剪映草稿。它不是固定成片：规则必须实际改变镜头数量、平均镜头时长、钩子或结尾中的至少两项，否则演示会失败。
+
 | 能力 | 新用户是否需要配置 | 未配置时 |
 | --- | --- | --- |
 | 上传、分析、剪辑、字幕、预览、剪映草稿 | 不需要 | 直接使用本地模式 |
@@ -49,7 +51,7 @@ macOS 详细说明与故障定位见 [macOS 本地运行手册](docs/runbooks/ma
 Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 macOS 产物并挂到 Release：
 
 - 已签名发布包入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>。CI 先创建草稿 Release，签名与验收完成后才由维护者公开。
-- Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，优先安装到 B 盘，其他电脑自动使用用户本地应用目录，并注册登录自启。
+- Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，默认安装到当前用户的本地应用目录；只有维护者明确传入 `-InstallDir`/`-DataDir` 时才使用 B 盘或其他位置，并注册登录自启。
 - macOS：`VideoWorkbenchSync` + `install-macos.sh` + LaunchAgent，安装到用户目录并登录自启。
 
 仓库内 Python 命令只保留给开发者调试：

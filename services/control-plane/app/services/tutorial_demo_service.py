@@ -116,11 +116,19 @@ class TutorialDemoService:
                 session.commit()
 
                 self._stage(session, run, "transcribing_and_learning")
+                cloud_asr_ready = bool(
+                    self.settings.volcano_asr_api_key
+                    or (
+                        self.settings.volcano_asr_app_key
+                        and self.settings.volcano_asr_access_key
+                    )
+                )
+                quality_profile = "production" if cloud_asr_ready else "fast_preview"
                 recipe = self.tutorial_understanding.process(
                     session,
                     course.id,
-                    quality_profile="fast_preview",
-                    cloud_processing_allowed=False,
+                    quality_profile=quality_profile,
+                    cloud_processing_allowed=cloud_asr_ready,
                 )
                 run.recipe_id = recipe.id
                 session.add(run)
@@ -133,11 +141,13 @@ class TutorialDemoService:
                     title="宠物护理前后对比",
                     content_type="商品介绍",
                     commercial=True,
-                    quality_profile="fast_preview",
-                    cloud_processing_allowed=False,
+                    quality_profile=quality_profile,
+                    cloud_processing_allowed=cloud_asr_ready,
                 )
                 run.job_id = result.job.id
                 run.task_id = result.task.id
+                session.add(run)
+                session.commit()
                 if result.job.state in {"quality_blocked", "failed", "handoff_failed"}:
                     raise ValueError(result.job.error_code or result.job.state)
 

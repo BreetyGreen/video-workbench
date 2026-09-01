@@ -113,6 +113,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 
 未安装剪映也能生成 `draft.zip`。安装并至少打开一次剪映后，Windows/macOS 启动器会写入本机运行清单；审核页的“导入剪映并打开”会校验 ZIP、质量门禁和媒体路径，只创建新工程、不覆盖已有草稿，然后请求本机助手唤起客户端。`draft.zip` 只作为恢复下载包。生成并导入草稿不等于在所有剪映版本上自动导出成片。
 
+### 一键验收：先理解教学视频，再剪另一批素材
+
+配置助手中的“运行完整教学演示”用于验证这条主链，不需要用户先准备课程文件：
+
+```text
+带语音的教学视频（独立画面）
+  → ASR 分段与时间码证据
+  → 钩子、节奏、字幕、特写、对比、CTA 等规则
+  → 与教学视频不同且许可明确的素材
+  → 基线时间线 + 应用规则后的时间线
+  → 至少两项可解释差异
+  → 真实渲染与质量门禁
+  → 剪映草稿和打开请求
+```
+
+证据文件包括 `tutorial-transcript.json`、`editing-recipe.json`、`baseline-timeline.json`、`course-rule-trace.json`、`course-comparison.json` 和 `source-ledger.json`。每条规则保存原文片段、开始/结束时间和置信度；最终时间线的镜头保存实际命中的规则 ID。若规则没有造成足够的可观察变化，任务以 `course_rules_not_applied` 失败，不会把“成功转写”冒充为“已经学会剪辑”。
+
+零 Key 时使用本地 Whisper，首次运行要下载模型；当前机器若已经配置并允许 BigASR，演示会优先使用云转写并把提供方和模型写入证据。公开演示素材来自许可明确的来源并锁定 SHA-256；真实商用课程仍只会选取明确标记为 `commercial_authorized` 的素材。
+
 ## 可选增强：什么时候才需要 Key
 
 ### volcano-asr：火山引擎 BigASR
