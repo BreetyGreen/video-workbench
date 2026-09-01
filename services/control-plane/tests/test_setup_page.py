@@ -35,6 +35,9 @@ def test_setup_page_contains_local_first_flow(client: TestClient):
     assert 'id="device-pairing-result"' in page.text
     assert "查看已签名 Mac / Windows 发布包" in page.text
     assert 'id="confirm-local-mode"' in page.text
+    assert 'id="run-tutorial-demo"' in page.text
+    assert 'id="tutorial-demo-result"' in page.text
+    assert "运行完整教学演示" in page.text
     assert 'aria-label="首次启动进度"' in page.text
     assert 'href="/"' in page.text
     assert 'href="/docs/capabilities-and-configuration"' in page.text
@@ -61,6 +64,8 @@ def test_setup_assets_are_served_and_use_real_apis(client: TestClient):
     assert "/api/setup/preferences" in script.text
     assert "/api/setup/validate/" in script.text
     assert "/api/devices/pairing-codes" in script.text
+    assert "/api/tutorial-learning-demo" in script.text
+    assert "pollTutorialDemo" in script.text
     assert "window.location.origin" in script.text
     assert "localStorage" not in script.text
 

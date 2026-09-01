@@ -24,6 +24,14 @@ DOWNLOADABLE_ARTIFACTS = {
     "edit-timeline.json",
     "render-report.json",
     "quality-report.json",
+    "baseline-timeline.json",
+    "course-rule-trace.json",
+    "course-comparison.json",
+    "rights-ledger.json",
+    "tutorial-provenance.json",
+    "tutorial-learning.mp4",
+    "tutorial-transcript.json",
+    "learned-course-recipe.json",
 }
 
 

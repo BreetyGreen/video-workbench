@@ -11,7 +11,7 @@ import secrets
 import shutil
 from typing import Callable
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -29,7 +29,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus
+from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -65,6 +65,7 @@ from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
 from app.schemas.device_delivery import DevicePairRead, DevicePairRequest, PairingCodeRead
+from app.schemas.tutorial_demo import TutorialDemoRunRead
 from app.services.automation_service import (
     AutomationScheduler,
     DailyAutomation,
@@ -101,6 +102,8 @@ from app.services.course_material_analysis_service import CourseMaterialAnalysis
 from app.services.course_material_search_service import CourseMaterialSearchService
 from app.services.course_edit_job_service import CourseEditJobService
 from app.services.device_delivery_service import DeviceDeliveryService
+from app.services.tutorial_demo_assets import TutorialDemoAssetService
+from app.services.tutorial_demo_service import TutorialDemoService
 logger = logging.getLogger(__name__)
 
 
@@ -114,6 +117,7 @@ def create_app(
     douyin_publish_client: DouyinPublishClient | None = None,
     pipeline_service_override: object | None = None,
     jianying_handoff_override: object | None = None,
+    tutorial_demo_service_override: object | None = None,
 ) -> FastAPI:
     app_settings = settings or Settings()
     database = Database(app_settings.database_url)
@@ -209,6 +213,33 @@ def create_app(
     course_material_search = CourseMaterialSearchService()
     course_edit_jobs = CourseEditJobService(app_settings, pipeline_service, jianying_handoff)
     device_delivery = DeviceDeliveryService(usage_key)
+    tutorial_demo = tutorial_demo_service_override or TutorialDemoService(
+        app_settings,
+        database,
+        TutorialDemoAssetService(app_settings, tts=speech_client),
+        tutorial_understanding,
+        course_edit_jobs,
+    )
+
+    def tutorial_demo_read(run: TutorialDemoRun) -> TutorialDemoRunRead:
+        try:
+            artifacts = json.loads(run.artifacts_json or "{}")
+        except json.JSONDecodeError:
+            artifacts = {}
+        return TutorialDemoRunRead(
+            id=run.id,
+            state=run.state,
+            stage=run.stage,
+            course_id=run.course_id,
+            recipe_id=run.recipe_id,
+            job_id=run.job_id,
+            task_id=run.task_id,
+            error_code=run.error_code,
+            artifacts=artifacts if isinstance(artifacts, dict) else {},
+            created_at=run.created_at,
+            updated_at=run.updated_at,
+            finished_at=run.finished_at,
+        )
 
     def course_read(course, assets) -> CourseRead:
         return CourseRead(
@@ -398,6 +429,29 @@ def create_app(
         if provider_id not in cards:
             raise HTTPException(status_code=404, detail={"code": "unknown_setup_provider"})
         return cards[provider_id]
+
+    @app.post(
+        "/api/tutorial-learning-demo",
+        response_model=TutorialDemoRunRead,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def start_tutorial_learning_demo(
+        background_tasks: BackgroundTasks,
+        session: Session = Depends(session_dependency),
+    ) -> TutorialDemoRunRead:
+        run = tutorial_demo.create(session)
+        background_tasks.add_task(tutorial_demo.execute, run.id)
+        return tutorial_demo_read(run)
+
+    @app.get("/api/tutorial-learning-demo/{run_id}", response_model=TutorialDemoRunRead)
+    def read_tutorial_learning_demo(
+        run_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> TutorialDemoRunRead:
+        run = session.get(TutorialDemoRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail={"code": "tutorial_demo_not_found"})
+        return tutorial_demo_read(run)
 
     @app.get("/settings/cloud-usage", response_class=HTMLResponse)
     def cloud_usage_settings_page(request: Request):

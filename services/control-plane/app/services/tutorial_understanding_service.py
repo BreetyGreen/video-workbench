@@ -73,6 +73,10 @@ class TutorialUnderstandingService:
                 quality_profile=quality_profile,
                 cloud_processing_allowed=cloud_processing_allowed,
             )
+            source.with_suffix(".transcript.json").write_text(
+                transcript.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
             duration_ms = int(transcript.duration_seconds * 1000)
             result = []
             for index, segment in enumerate(transcript.segments, start=1):

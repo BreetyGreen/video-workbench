@@ -148,6 +148,23 @@ class CourseEditJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class TutorialDemoRun(SQLModel, table=True):
+    __tablename__ = "tutorial_demo_runs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    state: str = Field(default="queued", index=True)
+    stage: str = Field(default="queued", index=True)
+    course_id: str | None = Field(default=None, foreign_key="courses.id", index=True)
+    recipe_id: str | None = Field(default=None, foreign_key="editing_recipes.id", index=True)
+    job_id: str | None = Field(default=None, foreign_key="course_edit_jobs.id", index=True)
+    task_id: str | None = Field(default=None, foreign_key="video_tasks.id", index=True)
+    error_code: str = ""
+    artifacts_json: str = "{}"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+
+
 class DeliveryDevice(SQLModel, table=True):
     __tablename__ = "delivery_devices"
 

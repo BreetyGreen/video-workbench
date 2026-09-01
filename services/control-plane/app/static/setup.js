@@ -197,6 +197,75 @@ async function createDevicePairingCode() {
   }
 }
 
+const tutorialStageLabels = {
+  queued: "已进入队列",
+  creating_course: "创建隔离演示课程",
+  preparing_tutorial_video: "准备有声教学视频",
+  preparing_licensed_materials: "下载并校验授权素材",
+  transcribing_and_learning: "教学视频 ASR 与规则学习",
+  editing_and_quality_gate: "基线对照、剪辑与质量门禁",
+  collecting_acceptance_evidence: "整理验收证据",
+  complete: "完整演示已通过",
+  failed: "演示未通过",
+};
+
+function renderTutorialDemo(run) {
+  const output = $("#tutorial-demo-result");
+  output.hidden = false;
+  const label = tutorialStageLabels[run.stage] || run.stage;
+  if (run.state === "completed") {
+    const links = [
+      ["查看成片与质量报告", run.artifacts.review_url],
+      ["教学视频", run.artifacts.tutorial_video_url],
+      ["ASR 转写", run.artifacts.transcript_url],
+      ["课程配方", run.artifacts.recipe_url],
+      ["基线差异", run.artifacts.comparison_url],
+      ["规则引用", run.artifacts.rule_trace_url],
+      ["素材授权账本", run.artifacts.rights_ledger_url],
+      ["剪映草稿", run.artifacts.draft_url],
+    ].filter(([, url]) => url);
+    output.innerHTML = `<strong>${escapeHtml(label)}</strong><span>教学视频、独立素材、规则证据、成片和剪映草稿均已落盘。</span><div class="tutorial-demo-links">${links.map(([name, url]) => `<a href="${safeUrl(url)}">${escapeHtml(name)}</a>`).join("")}</div>`;
+    return;
+  }
+  if (run.state === "failed") {
+    output.innerHTML = `<strong>${escapeHtml(label)}</strong><span>${escapeHtml(run.error_code || "请查看服务日志中的失败代码")}</span>`;
+    return;
+  }
+  output.innerHTML = `<strong>${escapeHtml(label)}</strong><span>后台执行中，可以保留此页面等待结果。</span>`;
+}
+
+async function pollTutorialDemo(runId) {
+  try {
+    const run = await api(`/api/tutorial-learning-demo/${encodeURIComponent(runId)}`);
+    renderTutorialDemo(run);
+    if (!["completed", "failed"].includes(run.state)) {
+      window.setTimeout(() => pollTutorialDemo(runId), 1500);
+    } else {
+      const button = $("#run-tutorial-demo");
+      button.disabled = false;
+      button.textContent = run.state === "completed" ? "重新运行完整演示" : "重新尝试完整演示";
+    }
+  } catch (error) {
+    toast(`演示状态读取失败：${error.message}`);
+    window.setTimeout(() => pollTutorialDemo(runId), 2500);
+  }
+}
+
+async function startTutorialDemo() {
+  const button = $("#run-tutorial-demo");
+  button.disabled = true;
+  button.textContent = "正在启动…";
+  try {
+    const run = await api("/api/tutorial-learning-demo", { method: "POST" });
+    renderTutorialDemo(run);
+    pollTutorialDemo(run.id);
+  } catch (error) {
+    toast(`无法启动教学演示：${error.message}`);
+    button.disabled = false;
+    button.textContent = "运行完整教学演示";
+  }
+}
+
 async function loadSetup() {
   try {
     renderSetup(await api("/api/setup/status"));
@@ -210,4 +279,5 @@ $("#confirm-local-mode").addEventListener("click", confirmLocalMode);
 $("#finish-setup").addEventListener("click", confirmLocalMode);
 $("#device-server-url").textContent = window.location.origin;
 $("#create-device-pairing-code").addEventListener("click", createDevicePairingCode);
+$("#run-tutorial-demo").addEventListener("click", startTutorialDemo);
 loadSetup();
