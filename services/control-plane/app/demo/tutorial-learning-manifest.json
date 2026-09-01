@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "materials": [
+    {
+      "id": "cat-grooming-cc0",
+      "title": "A male cat grooms a female kitten",
+      "file_name": "A_male_cat_grooms_a_female_kitten_2021-08-25_August_25.webm",
+      "file_page": "https://commons.wikimedia.org/wiki/File:A_male_cat_grooms_a_female_kitten_2021-08-25_August_25.webm",
+      "download_url": "https://commons.wikimedia.org/wiki/Special:Redirect/file/A_male_cat_grooms_a_female_kitten_2021-08-25_August_25.webm",
+      "author": "Wiki Taro",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_required": false,
+      "expected_mime_type": "video/webm",
+      "expected_duration_seconds": 29.362,
+      "expected_sha256": "063e12b02dc36b0066a839f22de1182413459bc34f42ac624379793379a0efd3",
+      "maximum_bytes": 30000000
+    },
+    {
+      "id": "cat-nail-trim-ccby",
+      "title": "Larry the cat getting his nails trimmed",
+      "file_name": "Larry_the_cat_getting_his_nails_trimmed_VID_20210408_123153.webm",
+      "file_page": "https://commons.wikimedia.org/wiki/File:Larry_the_cat_getting_his_nails_trimmed_(VID_20210408_123153).webm",
+      "download_url": "https://commons.wikimedia.org/wiki/Special:Redirect/file/Larry_the_cat_getting_his_nails_trimmed_%28VID_20210408_123153%29.webm",
+      "author": "Trougnouf",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution_required": true,
+      "expected_mime_type": "video/webm",
+      "expected_duration_seconds": 51.86,
+      "expected_sha256": "e10ed81213df4d9d49549a5065545a6fb9e4b4e669afdc3a6717cf03c3b4e826",
+      "maximum_bytes": 45000000
+    }
+  ]
+}
