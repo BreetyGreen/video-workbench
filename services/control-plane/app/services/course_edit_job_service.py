@@ -130,6 +130,7 @@ class CourseEditJobService:
                 commercial=commercial,
                 quality_profile=quality_profile,
                 cloud_processing_allowed=cloud_processing_allowed,
+                course_recipe_id=recipe.id,
             )
             job.task_id = task.id
             job.state = "rendering"

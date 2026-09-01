@@ -137,6 +137,7 @@ def test_commercial_course_job_runs_without_review_and_hands_off(tmp_path: Path)
         assert job.quality_status == "pass"
         assert job.task.status == TaskStatus.APPROVED
         assert job.task.rights_confirmed is True
+        assert job.task.course_recipe_id == job.job.recipe_id
         assert "前 3 秒展示佩戴效果" in job.task.tutorial_text
         assert len(job.task.materials) == 1
         assert Path(job.task.materials[0].stored_path).is_file()

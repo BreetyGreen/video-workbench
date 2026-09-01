@@ -32,6 +32,10 @@ def _category(text: str) -> str:
         return "audio"
     if any(token in text for token in ("结尾", "行动提示", "引导", "下单")):
         return "cta"
+    if any(token in text for token in ("特写", "细节镜头", "近景")):
+        return "closeup"
+    if any(token in text for token in ("对比", "使用前后", "前后变化")):
+        return "comparison"
     if any(token in text for token in ("不要", "禁止", "避免", "不使用")):
         return "negative"
     return "structure"

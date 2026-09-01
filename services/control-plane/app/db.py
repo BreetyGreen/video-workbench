@@ -27,10 +27,14 @@ class Database:
                 "delivery_state": "ALTER TABLE video_tasks ADD COLUMN delivery_state VARCHAR",
                 "delivery_provider_id": "ALTER TABLE video_tasks ADD COLUMN delivery_provider_id VARCHAR",
                 "delivered_at": "ALTER TABLE video_tasks ADD COLUMN delivered_at DATETIME",
+                "course_recipe_id": "ALTER TABLE video_tasks ADD COLUMN course_recipe_id VARCHAR",
             }
             for column, statement in additions.items():
                 if column not in existing:
                     connection.execute(text(statement))
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_video_tasks_course_recipe_id ON video_tasks (course_recipe_id)")
+            )
             recipe_existing = {
                 row[1]
                 for row in connection.execute(text("PRAGMA table_info(editing_recipes)"))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 from sqlmodel import Session, select
@@ -11,7 +12,7 @@ from app.adapters.dify import DifyClient
 from app.adapters.jianying import edit_plan_from_timeline
 from app.adapters.volcano_tts import TTSResult, VolcanoTTSClient
 from app.config import Settings
-from app.models import DeliveryState, Material, TaskStatus, TrendRecord, VideoTask
+from app.models import DeliveryState, EditingRecipe, EditingRule, Material, TaskStatus, TrendRecord, VideoTask
 from app.schemas.analysis import EditRecipe, ViralAnalysis
 from app.schemas.editing import MediaAnalysis
 from app.services.draft_service import DraftService
@@ -23,6 +24,7 @@ from app.services.render_service import RenderService
 from app.services.task_service import get_task
 from app.services.timeline_service import TimelinePlanner
 from app.services.usage_service import UsageService
+from app.services.course_recipe_service import CourseEditingPolicy, CourseRecipeService
 
 
 class PipelineService:
@@ -53,6 +55,36 @@ class PipelineService:
         self.drafts = DraftService(settings.artifact_dir, target="6+")
         self.reference_intelligence = ReferenceIntelligenceService()
         self.quality_gates = QualityGateService(settings)
+        self.course_recipes = CourseRecipeService()
+
+    def _course_policy(
+        self,
+        session: Session,
+        task: VideoTask,
+        analysis_dir: Path,
+        evidence: list[str],
+    ) -> CourseEditingPolicy | None:
+        if not task.course_recipe_id:
+            return None
+        recipe = session.get(EditingRecipe, task.course_recipe_id)
+        if recipe is None:
+            raise ValueError("course_recipe_not_found")
+        rules = list(
+            session.exec(
+                select(EditingRule)
+                .where(EditingRule.recipe_id == recipe.id)
+                .order_by(EditingRule.sort_order, EditingRule.id)
+            ).all()
+        )
+        policy = self.course_recipes.compile(recipe, rules)
+        (analysis_dir / "course-recipe.json").write_text(
+            json.dumps(asdict(policy), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        evidence.append(
+            f"课程配方：版本 {policy.version}，{len(policy.rules)} 条带教学视频证据的规则"
+        )
+        return policy
 
     def _record_usage(
         self,
@@ -563,6 +595,7 @@ class PipelineService:
             except Exception as error:
                 warnings.append(f"参考片分析失败，已回退源素材智能剪辑：{type(error).__name__}")
         recipe = self._analyze_tutorial(session, task, analyses, analysis_dir, evidence, warnings)
+        course_policy = self._course_policy(session, task, analysis_dir, evidence)
         viral = self._analyze_viral(session, task, analysis_dir, evidence, warnings)
 
         task.status = TaskStatus.PLANNING
@@ -582,6 +615,7 @@ class PipelineService:
             bgm_path=audio.stored_path if audio else None,
             reference_brief=reference_brief,
             audio_decision=None,
+            course_policy=course_policy,
         )
         narration_text = self._narration_text(task, target_seconds=preliminary_timeline.actual_duration_seconds)
         voiceover = None
@@ -674,6 +708,17 @@ class PipelineService:
             encoding="utf-8",
         )
         evidence.append(f"音频路由：{audio_decision.mode}；{audio_decision.reason}")
+        baseline_timeline = None
+        if course_policy is not None:
+            baseline_timeline = self.planner.plan(
+                analyses,
+                title=task.title,
+                target_seconds=target_seconds,
+                recipe=recipe,
+                bgm_path=audio.stored_path if audio else None,
+                reference_brief=reference_brief,
+                audio_decision=audio_decision,
+            )
         timeline = self.planner.plan(
             analyses,
             title=task.title,
@@ -682,7 +727,29 @@ class PipelineService:
             bgm_path=audio.stored_path if audio else None,
             reference_brief=reference_brief,
             audio_decision=audio_decision,
+            course_policy=course_policy,
         )
+        if course_policy is not None and baseline_timeline is not None:
+            comparison = self.course_recipes.compare(baseline_timeline, timeline, course_policy)
+            (task_artifacts / "baseline-timeline.json").write_text(
+                baseline_timeline.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+            (task_artifacts / "course-rule-trace.json").write_text(
+                json.dumps(
+                    [item.model_dump(mode="json") for item in timeline.rule_trace],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (task_artifacts / "course-comparison.json").write_text(
+                json.dumps(comparison, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            evidence.append(
+                "课程规则已改变时间线：" + "、".join(comparison["meaningful_changes"])
+            )
         (task_artifacts / "edit-timeline.json").write_text(timeline.model_dump_json(indent=2), encoding="utf-8")
         evidence.append(
             f"智能时间线：{len(timeline.clips)} 段剪辑，{timeline.source_count} 个素材源，"

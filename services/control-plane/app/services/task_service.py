@@ -212,6 +212,7 @@ def create_task_from_course_assets(
     cloud_processing_allowed: bool = False,
     voice_preset: str = "vivi-2",
     voice_type: str = "zh_female_vv_uranus_bigtts",
+    course_recipe_id: str | None = None,
 ) -> VideoTask:
     """Create an isolated render task from course-owned, rights-checked assets."""
     if not assets:
@@ -222,6 +223,7 @@ def create_task_from_course_assets(
         content_type=content_type.strip(),
         rights_confirmed=True,
         source_type="course_automation",
+        course_recipe_id=course_recipe_id,
     )
     task.brief = TaskBrief(
         task_id=task.id,

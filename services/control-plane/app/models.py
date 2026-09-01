@@ -182,6 +182,7 @@ class VideoTask(SQLModel, table=True):
     source_conversation: str | None = None
     source_message_id: str | None = None
     deduplication_key: str | None = Field(default=None, index=True, unique=True)
+    course_recipe_id: str | None = Field(default=None, foreign_key="editing_recipes.id", index=True)
     archived_at: datetime | None = Field(default=None, index=True)
     archive_reason: str | None = None
     delivery_state: DeliveryState | None = None
