@@ -81,19 +81,83 @@ def _application_candidates(home: Path, mdfind_output: str) -> tuple[Path, ...]:
     )
 
 
+def _bounded_windows_applications(
+    roots: tuple[Path, ...],
+    *,
+    max_depth: int = 3,
+) -> tuple[Path, ...]:
+    matches: set[Path] = set()
+    executable_names = {"jianyingpro.exe", "capcut.exe"}
+    for root in roots:
+        candidate = Path(root)
+        if candidate.is_file() and candidate.name.casefold() in executable_names:
+            matches.add(candidate)
+            continue
+        if not candidate.is_dir() or candidate.is_symlink():
+            continue
+        try:
+            for current, dirnames, filenames in os.walk(candidate, followlinks=False):
+                current_path = Path(current)
+                try:
+                    depth = len(current_path.relative_to(candidate).parts)
+                except ValueError:
+                    continue
+                dirnames[:] = [
+                    name for name in dirnames if not (current_path / name).is_symlink()
+                ]
+                for filename in filenames:
+                    if filename.casefold() in executable_names:
+                        matches.add(current_path / filename)
+                if depth >= max_depth:
+                    dirnames[:] = []
+        except OSError:
+            continue
+    return tuple(
+        sorted(
+            matches,
+            key=lambda path: (
+                0 if path.name.casefold() == "jianyingpro.exe" else 1,
+                str(path).casefold(),
+            ),
+        )
+    )
 def discover_jianying(
     *,
     home: Path,
     system: str,
     mdfind_output: str = "",
+    windows_app_roots: tuple[Path, ...] | None = None,
+    windows_draft_roots: tuple[Path, ...] | None = None,
 ) -> JianyingLocation:
     user_home = Path(home)
-    app_candidates = _application_candidates(user_home, mdfind_output) if system == "Darwin" else ()
-    search_roots = (
-        user_home / "Movies",
-        user_home / "Documents",
-        user_home / "Library" / "Application Support",
-    )
+    if system == "Darwin":
+        app_candidates = _application_candidates(user_home, mdfind_output)
+        search_roots = (
+            user_home / "Movies",
+            user_home / "Documents",
+            user_home / "Library" / "Application Support",
+        )
+    elif system == "Windows":
+        local = user_home / "AppData" / "Local"
+        app_roots = windows_app_roots or (
+            Path(r"B:\Apps\JianyingPro"),
+            local / "JianyingPro",
+            local / "CapCut",
+        )
+        app_candidates = _bounded_windows_applications(tuple(Path(path) for path in app_roots))
+        search_roots = windows_draft_roots or (
+            Path(r"B:\JianyingData\Drafts\JianyingPro Drafts"),
+            local / "JianyingPro" / "User Data" / "Projects",
+            local / "CapCut" / "User Data" / "Projects",
+            user_home / "Videos",
+            user_home / "Documents",
+        )
+    else:
+        app_candidates = ()
+        search_roots = (
+            user_home / "Movies",
+            user_home / "Documents",
+        )
     draft_candidates: set[Path] = set()
     for root in search_roots:
         draft_candidates.update(_bounded_draft_roots(root))

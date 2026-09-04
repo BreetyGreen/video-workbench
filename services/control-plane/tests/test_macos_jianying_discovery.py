@@ -21,6 +21,29 @@ def test_macos_discovers_app_and_valid_draft_root(tmp_path: Path):
     assert result.needs_folder_picker is False
 
 
+def test_windows_discovers_custom_app_and_draft_root(tmp_path: Path):
+    home = tmp_path / "Users" / "alice"
+    app_root = tmp_path / "Apps" / "JianyingPro"
+    app = app_root / "11.3.0" / "JianyingPro.exe"
+    draft = tmp_path / "JianyingData" / "Drafts" / "JianyingPro Drafts"
+    app.parent.mkdir(parents=True)
+    app.write_bytes(b"MZ")
+    (draft / "sample").mkdir(parents=True)
+    (draft / "sample" / "draft_info.json").write_text("{}", encoding="utf-8")
+
+    result = discover_jianying(
+        home=home,
+        system="Windows",
+        windows_app_roots=(app_root,),
+        windows_draft_roots=(draft,),
+    )
+
+    assert result.installed is True
+    assert result.app_path == app
+    assert result.draft_root == draft
+    assert result.needs_folder_picker is False
+
+
 def test_ambiguous_roots_require_one_picker(tmp_path: Path):
     home = tmp_path / "Users" / "alice"
     for parent in (home / "Movies" / "A", home / "Documents" / "B"):

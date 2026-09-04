@@ -96,8 +96,8 @@
 **Files:**
 - No production changes unless verification reveals a regression.
 
-- [x] Run all control-plane tests with the scheduler disabled (`261 passed` on 2026-09-04).
+- [x] Run all control-plane tests with the scheduler disabled (`262 passed` on 2026-09-04 after Windows discovery closure).
 - [x] Run JavaScript syntax checks.
-- [ ] Run `python scripts/verify-fresh-clone.py --dry-run` after committing the complete tracked snapshot.
+- [x] Run `python scripts/verify-fresh-clone.py --dry-run` after committing the complete tracked snapshot.
 - [x] Run the tutorial demo and inspect segment, rule-trace, comparison, quality, and final media artifacts.
 - [x] Record confirmed evidence and remaining Mac/server/user-action boundaries in `docs/progress.md`.
