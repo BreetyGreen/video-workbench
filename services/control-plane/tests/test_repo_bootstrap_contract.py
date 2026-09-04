@@ -59,6 +59,22 @@ def test_windows_start_selects_an_available_port_and_preserves_existing_data_mou
     assert "http://127.0.0.1:$Port/health" in start
 
 
+def test_native_launchers_publish_jianying_manifest_and_watch_open_requests():
+    compose = (ROOT / "deploy" / "compose.yml").read_text(encoding="utf-8")
+    windows = (ROOT / "scripts" / "start.ps1").read_text(encoding="utf-8")
+    macos = (ROOT / "scripts" / "start-local.sh").read_text(encoding="utf-8")
+    helper = (ROOT / "scripts" / "jianying-host-helper.py").read_text(encoding="utf-8")
+
+    assert "WORKBENCH_HOST_JIANYING_DRAFT_DIR" in compose
+    assert "target: /jianying-drafts" in compose
+    assert "jianying-host-helper.py" in windows
+    assert "-WindowStyle Hidden" in windows
+    assert "jianying-host-helper.py" in macos
+    assert "runtime/jianying.json" in helper
+    assert "open-requests" in helper
+    assert "subprocess.Popen" in helper
+
+
 def test_fresh_clone_verifier_stops_the_service_process_tree():
     text = (ROOT / "scripts" / "verify-fresh-clone.py").read_text(encoding="utf-8")
 

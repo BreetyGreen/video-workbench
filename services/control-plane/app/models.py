@@ -25,6 +25,197 @@ class DeliveryState(StrEnum):
     DOUYIN_PUBLISHED = "douyin_published"
 
 
+class CourseAssetRole(StrEnum):
+    TUTORIAL = "tutorial"
+    REFERENCE = "reference"
+    MATERIAL = "material"
+
+
+class TutorialSegmentType(StrEnum):
+    LECTURE = "lecture"
+    SOFTWARE_OPERATION = "software_operation"
+    FINISHED_EXAMPLE = "finished_example"
+    INTRO_OUTRO = "intro_outro"
+    UNKNOWN = "unknown"
+
+
+class RightsStatus(StrEnum):
+    UNKNOWN = "unknown"
+    PERSONAL_LEARNING = "personal_learning"
+    COMMERCIAL_AUTHORIZED = "commercial_authorized"
+
+
+class Course(SQLModel, table=True):
+    __tablename__ = "courses"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    title: str
+    source_type: str = Field(default="dingtalk", index=True)
+    source_user: str = ""
+    source_conversation: str = ""
+    source_message_id: str = Field(index=True, unique=True)
+    status: str = Field(default="received", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CourseAsset(SQLModel, table=True):
+    __tablename__ = "course_assets"
+    __table_args__ = (
+        UniqueConstraint("course_id", "sha256", "role", name="uq_course_asset_hash_role"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    role: CourseAssetRole = Field(index=True)
+    original_name: str
+    stored_path: str
+    mime_type: str
+    size_bytes: int
+    sha256: str = Field(index=True)
+    rights_status: RightsStatus = Field(default=RightsStatus.UNKNOWN, index=True)
+    source_message_id: str = Field(default="", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EditingRecipe(SQLModel, table=True):
+    __tablename__ = "editing_recipes"
+    __table_args__ = (UniqueConstraint("course_id", "version", name="uq_course_recipe_version"),)
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    version: int = 1
+    title: str
+    summary: str = ""
+    tutorial_asset_id: str | None = Field(default=None, foreign_key="course_assets.id", index=True)
+    transcript_sha256: str = Field(default="", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EditingRule(SQLModel, table=True):
+    __tablename__ = "editing_rules"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    category: str = Field(index=True)
+    instruction: str
+    evidence_text: str = ""
+    confidence: float = 1.0
+    source_asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    source_start_ms: int | None = None
+    source_end_ms: int | None = None
+    source_page: int | None = None
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class TutorialSegment(SQLModel, table=True):
+    __tablename__ = "tutorial_segments"
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "source_asset_id", "start_ms", "end_ms", name="uq_tutorial_segment_range"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    source_asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    segment_type: TutorialSegmentType = Field(default=TutorialSegmentType.UNKNOWN, index=True)
+    start_ms: int | None = None
+    end_ms: int | None = None
+    source_page: int | None = None
+    transcript_text: str = ""
+    ocr_text_json: str = "[]"
+    visual_cues_json: str = "[]"
+    related_rule_ids_json: str = "[]"
+    confidence: float = 0.0
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class MaterialShot(SQLModel, table=True):
+    __tablename__ = "material_shots"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "start_ms", "end_ms", name="uq_material_shot_range"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    start_ms: int
+    end_ms: int
+    thumbnail_path: str = ""
+    ocr_text: str = ""
+    tags_json: str = "[]"
+    embedding_json: str = "[]"
+    phash: str = Field(default="", index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CourseProcessingRun(SQLModel, table=True):
+    __tablename__ = "course_processing_runs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    state: str = Field(default="queued", index=True)
+    error_code: str = ""
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+
+
+class CourseEditJob(SQLModel, table=True):
+    __tablename__ = "course_edit_jobs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    task_id: str | None = Field(default=None, foreign_key="video_tasks.id", index=True)
+    device_id: str | None = Field(default=None, foreign_key="delivery_devices.id", index=True)
+    state: str = Field(default="queued", index=True)
+    commercial: bool = True
+    quality_status: str = "pending"
+    review_skipped: bool = False
+    handoff_status: str = "pending"
+    error_code: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class TutorialDemoRun(SQLModel, table=True):
+    __tablename__ = "tutorial_demo_runs"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    state: str = Field(default="queued", index=True)
+    stage: str = Field(default="queued", index=True)
+    course_id: str | None = Field(default=None, foreign_key="courses.id", index=True)
+    recipe_id: str | None = Field(default=None, foreign_key="editing_recipes.id", index=True)
+    job_id: str | None = Field(default=None, foreign_key="course_edit_jobs.id", index=True)
+    task_id: str | None = Field(default=None, foreign_key="video_tasks.id", index=True)
+    error_code: str = ""
+    artifacts_json: str = "{}"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+
+
+class DeliveryDevice(SQLModel, table=True):
+    __tablename__ = "delivery_devices"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    name: str
+    token_hash: str = Field(index=True, unique=True)
+    active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_seen_at: datetime | None = None
+
+
+class DevicePairingCode(SQLModel, table=True):
+    __tablename__ = "device_pairing_codes"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    code_hash: str = Field(index=True, unique=True)
+    expires_at: datetime
+    used_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class VideoTask(SQLModel, table=True):
     __tablename__ = "video_tasks"
 
@@ -38,6 +229,7 @@ class VideoTask(SQLModel, table=True):
     source_conversation: str | None = None
     source_message_id: str | None = None
     deduplication_key: str | None = Field(default=None, index=True, unique=True)
+    course_recipe_id: str | None = Field(default=None, foreign_key="editing_recipes.id", index=True)
     archived_at: datetime | None = Field(default=None, index=True)
     archive_reason: str | None = None
     delivery_state: DeliveryState | None = None
@@ -289,6 +481,15 @@ class CloudCredential(SQLModel, table=True):
     encrypted_secret_access_key: str = ""
     permission_mode: str = "read_only"
     verified_at: datetime | None = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ProviderCredential(SQLModel, table=True):
+    __tablename__ = "provider_credentials"
+
+    provider_id: str = Field(primary_key=True)
+    encrypted_values_json: str = "{}"
+    masked_values_json: str = "{}"
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

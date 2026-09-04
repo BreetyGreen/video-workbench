@@ -136,6 +136,11 @@ def test_planner_never_reuses_same_source_interval_and_caps_automatic_duration(t
     assert timeline.actual_duration_seconds <= 6
     assert all(clip.duration_seconds >= 0.3 for clip in timeline.clips)
     assert all(clip.duration_seconds <= 3.01 for clip in timeline.clips)
+    assert all(
+        clip.source_start_seconds >= 0.8
+        for clip in timeline.clips
+        if clip.reason.endswith("visual:opening_trimmed") or "opening_trimmed" in clip.reason
+    )
 
 
 def test_timeline_validator_rejects_source_bounds_and_timeline_gaps(tmp_path: Path):

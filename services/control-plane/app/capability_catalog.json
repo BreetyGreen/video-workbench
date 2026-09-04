@@ -154,6 +154,28 @@
     "docs_url": "/docs/capabilities-and-configuration#dingtalk"
   },
   {
+    "id": "course_automation",
+    "name": "课程理解与自动成片",
+    "tier": "local_no_key",
+    "summary": "联合 ASR、场景、关键帧和 OCR 区分老师讲解、软件操作与成片示例，再把讲解规则应用到独立授权素材的自动剪辑任务。",
+    "features": ["教学视频 ASR", "讲解/软件操作/成片示例分段", "OCR 与时间码证据", "规则原文与时间码", "基线/规则时间线对比", "规则命中追踪", "素材镜头切分", "商用授权过滤", "自动质量门禁", "一键完整教学演示", "跳过强制人工审核"],
+    "requires": ["至少一份教程", "至少一段视频素材", "商用任务需明确商用授权"],
+    "fallback": "无钉钉授权时可从工作台上传或使用模拟钉钉事件；本地剪辑内核不依赖云端 Key。",
+    "data_boundary": "教程与素材保存在运行目录；只有逐任务允许云处理时才会发送到已配置的云服务。",
+    "docs_url": "/docs/capabilities-and-configuration#course-automation"
+  },
+  {
+    "id": "remote_jianying_sync",
+    "name": "服务器到本机剪映同步",
+    "tier": "external_authorization",
+    "summary": "本机轻量助手从服务器领取通过质量门禁的草稿并安全导入剪映。",
+    "features": ["待交付队列", "分块下载", "ZIP 安全校验", "新建草稿", "启动剪映", "结果回报"],
+    "requires": ["HTTPS 服务器地址", "受控设备访问令牌", "本机已安装并至少打开一次剪映或 CapCut"],
+    "fallback": "下载 MP4 和草稿 ZIP，之后在装有剪映的设备执行一次同步。",
+    "data_boundary": "设备只下载自己可见的交付物；生产环境必须在 HTTPS 和访问控制之后运行。",
+    "docs_url": "/docs/capabilities-and-configuration#remote-jianying-sync"
+  },
+  {
     "id": "remote_deployment",
     "name": "服务器与远程访问",
     "tier": "external_authorization",

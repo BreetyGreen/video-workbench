@@ -45,7 +45,7 @@
             <div><dt>质量门禁</dt><dd class="quality-{{ quality_report.get('status', 'unknown') }}">{{ quality_report.get('status', 'unknown') }}</dd></div>
           </dl>
           <p class="inspector-note">{{ audio_route.get('reason', audio_route.get('decision_reason', '尚未记录音频路由原因')) }}</p>
-          {% if has_draft %}<a class="draft-action" href="/api/tasks/{{ task.id }}/artifacts/draft.zip">在剪映中导入草稿</a>{% endif %}
+          {% if has_draft %}<button class="draft-action" id="jianying-handoff" type="button" data-endpoint="/api/tasks/{{ task.id }}/handoff/jianying">{% if jianying_handoff.get('status') == 'imported' %}打开剪映{% else %}导入剪映并打开{% endif %}</button><p class="inspector-note" id="jianying-result">{% if jianying_handoff.get('status') == 'imported' %}草稿已安全导入本机目录{% elif jianying_handoff.get('status') == 'waiting' %}等待本机启动器检测剪映{% endif %}</p>{% endif %}
         </aside>
       </section>
 
@@ -105,6 +105,28 @@
           {% else %}<p class="muted">尚未生成剪辑时间线</p>{% endfor %}
         </div>
       </section>
+
+      {% if tutorial_segments %}
+      <section class="panel tutorial-segment-panel">
+        <div class="panel-heading"><div><p class="section-label">TUTORIAL EVIDENCE</p><h2>教学视频分段证据</h2></div><a href="/api/tasks/{{ task.id }}/artifacts/tutorial-segments.json">下载 tutorial-segments.json</a></div>
+        <p>系统会区分老师讲解、软件操作和成片示例。只有老师讲解会直接形成剪辑规则；操作与示例只作为时间码证据和规则参考。</p>
+        <div class="timeline-list" aria-label="教学视频多模态分段">
+          {% for segment in tutorial_segments %}
+          <article class="timeline-row tutorial-segment-row segment-{{ segment.get('segment_type', 'unknown') }}">
+            <span class="timecode">{{ '%.1f' | format(segment.get('start_ms', 0) / 1000) }}s → {{ '%.1f' | format(segment.get('end_ms', 0) / 1000) }}s</span>
+            <span>
+              <strong>{{ tutorial_segment_labels.get(segment.get('segment_type'), '待识别') }}</strong>
+              <small>{{ segment.get('transcript_text') or '该段无可用语音转写' }}</small>
+              {% if segment.get('ocr_texts') %}<small>OCR：{{ segment.get('ocr_texts') | join(' · ') }}</small>{% endif %}
+              {% if segment.get('related_rule_ids') %}<small>关联 {{ segment.get('related_rule_ids') | length }} 条剪辑规则 · 置信度 {{ '%.0f' | format(segment.get('confidence', 0) * 100) }}%</small>{% endif %}
+            </span>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% elif tutorial_segments_invalid %}
+      <section class="alert"><strong>教学分段证据不可用</strong>：tutorial-segments.json 格式无效，请重新处理教程。</section>
+      {% endif %}
 
       <section class="panel copy-panel">
         <div class="panel-heading"><div><p class="section-label">PUBLISH COPY</p><h2>发布文案候选</h2></div><span>人工确认后使用</span></div>

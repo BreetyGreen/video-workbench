@@ -113,15 +113,28 @@ class MediaAnalysisService:
 
         evidence_dir = output_dir.resolve() / material_id
         evidence_dir.mkdir(parents=True, exist_ok=True)
-        timestamps = [0.1, probe.duration_seconds / 2]
-        timestamps.extend(scene.start_seconds + min(0.12, (scene.end_seconds - scene.start_seconds) / 2) for scene in scenes)
-        normalized = []
-        for timestamp in sorted(timestamps):
+        keyframe_limit = max(1, self.settings.keyframe_limit)
+        uniform_timestamps = [
+            probe.duration_seconds * (index + 0.5) / keyframe_limit
+            for index in range(keyframe_limit)
+        ]
+        # Keep deterministic coverage of the beginning and end, preserve scene
+        # transitions discovered by ffmpeg, then use uniform samples to fill the
+        # remaining budget.  This avoids regressing ordinary material analysis
+        # while still giving long tutorial recordings whole-duration coverage.
+        timestamps = [0.0]
+        if keyframe_limit > 1:
+            timestamps.append(max(0.0, probe.duration_seconds - 0.05))
+        timestamps.extend(scene.start_seconds for scene in scenes)
+        timestamps.extend(uniform_timestamps)
+        normalized: list[float] = []
+        for timestamp in timestamps:
             bounded = min(max(0, timestamp), max(0, probe.duration_seconds - 0.05))
             if not any(abs(bounded - existing) < 0.08 for existing in normalized):
                 normalized.append(bounded)
-            if len(normalized) >= max(1, self.settings.keyframe_limit):
+            if len(normalized) >= keyframe_limit:
                 break
+        normalized.sort()
 
         frames = []
         for index, timestamp in enumerate(normalized):

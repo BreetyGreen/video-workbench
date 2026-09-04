@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import re
 import sys
 from typing import Any
 
@@ -30,18 +31,37 @@ def event_from_callback(data: dict[str, Any], settings: ConnectorSettings) -> Di
         "image": "image/jpeg",
         "file": "application/octet-stream",
     }.get(message_type, "application/octet-stream")
+    message_text = str(
+        content.get("text")
+        or (data.get("text") or {}).get("content")
+        or data.get("contentText")
+        or ""
+    ).strip()
+    role = "material"
+    if "#教程" in message_text:
+        role = "tutorial"
+    elif "#案例" in message_text or "#参考" in message_text:
+        role = "reference"
+    rights_status = "unknown"
+    if "#商用授权" in message_text:
+        rights_status = "commercial_authorized"
+    elif "#个人学习" in message_text:
+        rights_status = "personal_learning"
+    clean_title = re.sub(r"#(?:教程|案例|参考|素材|商用授权|个人学习)\s*", "", message_text).strip()
     attachment = DingTalkFile(
         name=filename,
         mime_type=str(content.get("mimeType") or guessed_mime),
         size_bytes=int(content.get("fileSize") or 0),
         download_code=str(content.get("downloadCode") or ""),
         robot_code=str(data.get("robotCode") or settings.robot_code),
+        role=role,
+        rights_status=rights_status,
     )
     return DingTalkEvent(
         message_id=str(data.get("msgId") or data.get("messageId") or ""),
         sender_id=str(data.get("senderStaffId") or data.get("senderId") or "unknown"),
         conversation_id=str(data.get("conversationId") or "direct"),
-        title=f"钉钉素材-{filename}",
+        title=clean_title or f"钉钉课程-{filename}",
         content_type="unclassified",
         rights_confirmed=False,
         files=[attachment],

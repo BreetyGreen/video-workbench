@@ -63,6 +63,8 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
        要生成素材？→ Seedance，可选且可能计费，不得自动触发。
        要抖音搜索/发布？→ 必须应用权限；发布还必须用户 OAuth。
        要钉钉收件？→ 必须组织应用与机器人授权。
+       要让服务器按课程自动剪辑？→ 课程入库/处理/自动作业 API；本地基线无需 Key。
+       要自动进用户剪映？→ 服务器生成包，本机同步助手领取并导入。
        要远程多人访问？→ 服务器/域名/HTTPS，不影响本地模式。
 ```
 
@@ -84,6 +86,8 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 | `douyin_search` | Client Key、Client Secret、Device ID、平台权限 | 公开网页证据/人工导入 |
 | `douyin_publish` | Open ID、Access Token、发布权限 | MP4、文案和剪映草稿 |
 | `dingtalk` | 钉钉 Client ID/Secret、组织授权 | 工作台上传 |
+| `course_automation` | 无必需云 Key；要求课程与真实授权状态 | 模拟钉钉事件或工作台入库 |
+| `remote_jianying_sync` | HTTPS 地址和设备访问令牌 | 保留服务器草稿包等待设备 |
 | `remote_deployment` | 服务器、SSH、域名和 HTTPS | 继续使用 `127.0.0.1` 本机应用 |
 
 完整变量和默认值以 `services/control-plane/app/config.py` 与 `.env.example` 为准；不要在文档中复制任何实际值。
@@ -98,6 +102,8 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 
 1. `GET /health`：服务、数据库和交付目录。
 2. `GET /api/local-runtime`：FFmpeg、FFprobe、运行目录和剪映发现。
+
+Windows 默认运行目录位于当前用户的 `%LOCALAPPDATA%\VideoWorkbench`，不会因为机器存在 `B:` 盘就自动改盘。需要使用其他磁盘时，在安装同步助手时显式传入 `-InstallDir` 和 `-DataDir`；macOS 继续使用 `~/Library/Application Support/VideoWorkbench`。
 3. `GET /api/setup/status`：静态能力清单和实时服务状态。
 4. 任务卡住时看任务状态，再看任务目录中的时间线、渲染和质量报告。
 5. 云能力失败时查看模型路由和 `fallback_reason`；不得直接断言 Key 无效。
@@ -124,6 +130,18 @@ python scripts/verify-fresh-clone.py --dry-run
 - macOS 文件/自动化权限弹窗。
 - 安装并至少打开一次剪映，必要时选择草稿目录。
 - 购买服务器、提供 SSH 目标、配置域名和备案。
+
+## 课程自动剪辑与设备同步
+
+- `POST /api/courses/intake` 接收教程、案例和素材；`POST /api/courses/{id}/process` 生成带来源引用的规则并切分素材镜头。
+- `POST /api/course-edit-jobs` 使用最新规则和已授权课程视频执行真实剪辑。商用任务只接受 `commercial_authorized` 素材。
+- `POST /api/tutorial-learning-demo` 启动可重复的完整验收，`GET /api/tutorial-learning-demo/{run_id}` 读取阶段、错误、任务与证据链接。不要同步阻塞 HTTP 请求等待渲染；轮询到 `completed` 或 `failed`。
+- 验收必须检查教程 ASR 提供方、`tutorial-visual-analysis.json`、`tutorial-segments.json`、带时间码规则、`course-rule-trace.json`、`course-comparison.json`、`quality-report.json` 和最终媒体探测；只看到转写文本或一张图片不算通过。
+- `tutorial-segments.json` 至少要证明讲解、软件操作和成片示例被分开记录。只有 `lecture` 片段可直接生成规则；`software_operation`、`finished_example` 只能关联规则，不能把其中的示例广告口播直接当作用户剪辑要求。
+- 演示的教学画面与被剪素材必须不同；素材账本必须保留来源、许可链接、SHA-256 和下载回退信息。
+- 质量门禁通过后任务自动批准；失败仍停在诊断状态，不会交付半成品。
+- 服务器没有本机剪映目录时，作业进入 `awaiting_device`。管理员通过 `POST /api/devices/pairing-codes` 生成十分钟有效的一次性码；Mac/Windows 首次运行同步助手时输入一次，之后使用哈希验证的设备令牌领取草稿、新建工程、启动剪映并回报完成。
+- 同步助手运行时不需要 Codex；生产服务器必须使用 HTTPS 和访问控制，不能把裸 API 暴露到公网。
 
 把这些动作一次性列在最终交接中，不要在每个实现步骤重复打断用户。
 

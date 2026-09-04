@@ -5,7 +5,9 @@
 .superpowers/
 .worktrees/
 .tmp/
+.validation/
 data/
+fixtures/dingtalk/media/*.mp4
 docs/verification/
 services/control-plane/.venv/
 services/control-plane/data/
@@ -17,3 +19,8 @@ __pycache__/
 fixtures/media/*.mp4
 outputs/
 work/
+sync-helper/build/
+sync-helper/dist/
+sync-helper/*.spec
+/build/
+/*.spec

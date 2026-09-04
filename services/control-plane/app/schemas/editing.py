@@ -126,6 +126,7 @@ class TimelineClip(BaseModel):
     score: float = Field(ge=0)
     reason: str
     has_audio: bool
+    applied_rule_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_ranges(self):
@@ -176,6 +177,19 @@ class CoverPlan(BaseModel):
     title: str
 
 
+class CourseRuleTrace(BaseModel):
+    segment_id: str
+    rule_id: str
+    rule_category: str
+    tutorial_asset_id: str
+    tutorial_start_ms: int | None = None
+    tutorial_end_ms: int | None = None
+    evidence_text: str
+    decision: str
+    before: str
+    after: str
+
+
 class EditingTimeline(BaseModel):
     title: str
     width: int = 1080
@@ -190,4 +204,5 @@ class EditingTimeline(BaseModel):
     cover: CoverPlan | None = None
     removed_silence_seconds: float = Field(default=0, ge=0)
     source_count: int = Field(default=1, ge=1)
+    rule_trace: list[CourseRuleTrace] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

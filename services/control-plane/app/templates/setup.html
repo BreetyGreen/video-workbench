@@ -40,6 +40,18 @@
         <button class="setup-button primary" id="confirm-local-mode" type="button" disabled>使用本地模式进入工作台</button>
       </section>
 
+      <section class="setup-section tutorial-demo" aria-labelledby="tutorial-demo-title">
+        <div class="section-copy provider-heading">
+          <div>
+            <span class="setup-kicker">非强制验收</span>
+            <h2 id="tutorial-demo-title">亲眼看一次“先学教程，再自动剪辑”</h2>
+            <p>系统会生成有声教学视频、重新做 ASR、提取带时间证据的规则，再用独立授权宠物素材生成基线与课程增强成片。无需填写 Key 或上传文件。</p>
+          </div>
+          <button class="setup-button" id="run-tutorial-demo" type="button">运行完整教学演示</button>
+        </div>
+        <output class="tutorial-demo-result" id="tutorial-demo-result" aria-live="polite" hidden></output>
+      </section>
+
       <section class="setup-section" aria-labelledby="runtime-title">
         <div class="section-copy">
           <h2 id="runtime-title">本机检查</h2>
@@ -75,11 +87,30 @@
             <h2 id="providers-title">按需要连接增强能力</h2>
             <p>不用一次配完。每项都给出官方入口、所需内容和本地替代方案。</p>
           </div>
-          <span id="setup-completion">0 / 4 已连接</span>
+          <div><a class="setup-link" href="/settings/providers">填写增强服务配置</a><span id="setup-completion">0 / 4 已连接</span></div>
         </div>
         <div class="setup-provider-list" id="setup-provider-list" aria-live="polite">
           <div class="setup-skeleton provider"></div><div class="setup-skeleton provider"></div>
         </div>
+      </section>
+
+      <section class="setup-section device-pairing" aria-labelledby="device-pairing-title">
+        <div class="section-copy provider-heading">
+          <div>
+            <span class="setup-kicker">服务器交付</span>
+            <h2 id="device-pairing-title">把成片自动放进这台电脑的剪映</h2>
+            <p>管理员在这里生成一次性配对码。Mac/Windows 用户安装同步助手后只输入一次，之后无需 Codex，也不用反复填写 Key。</p>
+          </div>
+          <a class="setup-link" href="https://github.com/BreetyGreen/video-workbench/releases/latest" target="_blank" rel="noreferrer">查看已签名 Mac / Windows 发布包 ↗</a>
+        </div>
+        <div class="device-pairing-panel">
+          <div>
+            <span>当前服务器地址</span>
+            <strong id="device-server-url">正在读取…</strong>
+          </div>
+          <button class="setup-button" id="create-device-pairing-code" type="button">生成 10 分钟配对码</button>
+        </div>
+        <output class="device-pairing-result" id="device-pairing-result" aria-live="polite" hidden></output>
       </section>
 
       <footer class="setup-footer">
@@ -92,6 +123,6 @@
     </main>
 
     <div class="setup-toast" id="setup-toast" role="status" aria-live="polite"></div>
-    <script src="/static/setup.js?v=20260831-1" defer></script>
+    <script src="/static/setup.js?v=20260901-1" defer></script>
   </body>
 </html>

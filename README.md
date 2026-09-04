@@ -16,6 +16,8 @@ bash scripts/bootstrap.sh
 
 启动后浏览器进入 <http://127.0.0.1:8130/>。首次访问会显示可跳过的使用引导：可以点“先直接创作”立即使用零 Key 本地剪辑，也可以点“打开配置助手”检查 FFmpeg、本地目录、剪映位置并按需连接云服务。配置助手地址是 <http://127.0.0.1:8130/setup>，以后也始终可以从侧栏重新打开。
 
+想先验证“看教程再剪辑”是否真的生效，可以在配置助手点击“运行完整教学演示”。该演示会生成一条有真实语音的竖屏教学视频，转写并提取带时间码证据的剪辑规则，再用两条许可明确、与教程画面不同的公开视频完成剪辑；结果页同时提供基线时间线、规则时间线、差异报告、质量报告和剪映草稿。它不是固定成片：规则必须实际改变镜头数量、平均镜头时长、钩子或结尾中的至少两项，否则演示会失败。
+
 | 能力 | 新用户是否需要配置 | 未配置时 |
 | --- | --- | --- |
 | 上传、分析、剪辑、字幕、预览、剪映草稿 | 不需要 | 直接使用本地模式 |
@@ -24,6 +26,8 @@ bash scripts/bootstrap.sh
 | Pexels/Pixabay 公共素材 | 按需 | 上传自有视频或使用本地授权素材 |
 | 抖音官方热点与发布 | 需要平台审批和账号授权 | 公开热点证据与剪映本地草稿 |
 | 钉钉素材入口 | 需要组织应用授权 | 工作台直接上传 |
+| 课程理解与自动成片 | 不需要云 Key；商用素材需明确授权 | 模拟钉钉事件或工作台入库 |
+| 服务器到本机剪映同步 | 需要 HTTPS 服务器与受控设备访问 | 保留草稿包，装好剪映后再同步 |
 
 公开仓库不会附带维护者的账号凭据。每位用户只需为自己真正使用的外部服务完成一次授权；申请入口、所需字段、本地替代方案和当前连接状态都在配置助手中展示。
 
@@ -41,6 +45,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
 macOS 详细说明与故障定位见 [macOS 本地运行手册](docs/runbooks/macos-local.md)。云端模型、钉钉和抖音开放平台都是后续可选能力，不会阻塞本地上传、分析、剪辑、预览和剪映草稿生成。
+
+## 不依赖 Codex 的服务器课程模式
+
+Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 macOS 产物并挂到 Release：
+
+- 已签名发布包入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>。CI 先创建草稿 Release，签名与验收完成后才由维护者公开。
+- Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，默认安装到当前用户的本地应用目录；只有维护者明确传入 `-InstallDir`/`-DataDir` 时才使用 B 盘或其他位置，并注册登录自启。
+- macOS：`VideoWorkbenchSync` + `install-macos.sh` + LaunchAgent，安装到用户目录并登录自启。
+
+仓库内 Python 命令只保留给开发者调试：
+
+```bash
+python scripts/sync-jianying-device.py \
+  --server-url https://video.example.com \
+  --data-dir "$HOME/Library/Application Support/VideoWorkbench Sync" \
+  --watch
+```
+
+Windows 可把 `--data-dir` 指向 B 盘。正式公网部署必须使用 HTTPS 和访问控制；真实钉钉群收件仍需要企业应用、Stream 机器人和组织管理员授权。公开分发前还必须给 Windows 程序做 Authenticode 签名，并给 macOS 程序做 Developer ID 签名和公证，否则系统会显示未知开发者警告。详细边界见 [课程与配置指南](docs/capabilities-and-configuration.md) 和 [钉钉运行手册](docs/runbooks/dingtalk.md)。
 
 > 2026-08-21 收口入口：当前状态见 `docs/progress.md`，生产部署见 `docs/deployment.md`，必须由账号本人完成的购买与授权见 `docs/user-required-actions.md`。
 
@@ -87,9 +110,9 @@ Windows/Docker 首次启动会从 `.env.example` 创建未跟踪的 `.env`，并
 - 钉钉：按 `docs/runbooks/dingtalk.md` 创建 Stream 机器人，配置凭据后使用 `start.ps1 -EnableDingTalk`。
 - 抖音热点：只接抖音开放平台官方视频搜索接口；填写 Client Key、Client Secret、Device ID 并为应用申请 `aweme.dy.video_search` 能力。
 - 素材库：默认把任务中已勾选“拥有使用权”的视频去重登记到本地授权目录；可选填写 Pexels/Pixabay API Key，从官方视频搜索接口获取竖屏素材并保留作者、原页和许可链接，详见 `docs/runbooks/materials.md`。
-- 剪映：草稿 ZIP 可在未安装剪映时生成；安装后运行 `scripts/detect-jianying.ps1` 并人工打开样例，才可把兼容性状态改为已验证。
+- 剪映：启动器会检测本机客户端和草稿目录；生成完成后审核页可直接“导入剪映并打开”。`draft.zip` 只保留为故障恢复包，不再充当日常导入按钮。
 
-安装并至少打开一次剪映后，可把审核页对应草稿安全导入本机草稿目录。脚本会优先识别本机 B 盘的 `B:\JianyingData\Drafts\JianyingPro Drafts`，也可显式传入其他目录：
+安装并至少打开一次剪映后，正常情况下只需点击审核页的“导入剪映并打开”。启动器会优先识别本机 B 盘的 `B:\JianyingData\Drafts\JianyingPro Drafts`，并把草稿安全写入后唤起客户端。命令行导入脚本仅作为恢复手段：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\import-jianying-draft.ps1 -TaskId <任务 UUID>

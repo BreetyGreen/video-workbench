@@ -111,7 +111,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 
 质量门禁检查交付物完整性、视频/音频流、画布、时长漂移、时间线连续性、首帧钩子、黑场、长静音、字幕、旁白时长和字幕覆盖。阻断项失败时不能批准。
 
-未安装剪映也能生成 `draft.zip`。安装并至少打开一次剪映后，脚本会尝试发现草稿目录；无法发现时由用户选择目录。导入只创建新工程，不覆盖已有草稿。生成草稿不等于在所有剪映版本上自动导出成片。
+未安装剪映也能生成 `draft.zip`。安装并至少打开一次剪映后，Windows/macOS 启动器会写入本机运行清单；审核页的“导入剪映并打开”会校验 ZIP、质量门禁和媒体路径，只创建新工程、不覆盖已有草稿，然后请求本机助手唤起客户端。`draft.zip` 只作为恢复下载包。生成并导入草稿不等于在所有剪映版本上自动导出成片。
+
+### 一键验收：先理解教学视频，再剪另一批素材
+
+配置助手中的“运行完整教学演示”用于验证这条主链，不需要用户先准备课程文件：
+
+```text
+带语音的教学视频（独立画面）
+  → ASR + 场景 + 关键帧 OCR
+  → 老师讲解 / 软件操作 / 成片示例 / 片头片尾分段
+  → 钩子、节奏、字幕、特写、对比、CTA 等规则
+  → 与教学视频不同且许可明确的素材
+  → 基线时间线 + 应用规则后的时间线
+  → 至少两项可解释差异
+  → 真实渲染与质量门禁
+  → 剪映草稿和打开请求
+```
+
+证据文件包括 `tutorial-transcript.json`、`tutorial-visual-analysis.json`、`tutorial-segments.json`、`editing-recipe.json`、`baseline-timeline.json`、`course-rule-trace.json`、`course-comparison.json` 和 `source-ledger.json`。`tutorial-segments.json` 保存每段的类型、时间码、转写、OCR、视觉提示、置信度和关联规则；只有“老师讲解”会直接生成规则，软件操作和成片示例只作为证据与关联参考，避免把示例广告口播误当成教学要求。每条规则保存原文片段、开始/结束时间和置信度；最终时间线的镜头保存实际命中的规则 ID。若规则没有造成足够的可观察变化，任务以 `course_rules_not_applied` 失败，不会把“成功转写”冒充为“已经学会剪辑”。
+
+当前分段是可复现的本地多模态规则分类：它联合时间码、ASR 文本、场景、关键帧 OCR 和视觉提示，但还不是通用视觉大模型。遇到画中画、老师边操作边讲解、示例与讲解快速交替等复杂课程时，低置信度片段会保留为“待识别”，审核页可直接查看并下载证据；项目不会把低置信度判断伪装成确定结论。
+
+零 Key 时使用本地 Whisper，首次运行要下载模型；当前机器若已经配置并允许 BigASR，演示会优先使用云转写并把提供方和模型写入证据。公开演示素材来自许可明确的来源并锁定 SHA-256；真实商用课程仍只会选取明确标记为 `commercial_authorized` 的素材。
 
 ## 可选增强：什么时候才需要 Key
 
@@ -190,6 +212,17 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 
 ## 外部授权能力
 
+### course-automation：课程理解与自动成片
+
+课程文件可以来自钉钉，也可以直接调用课程入库接口。服务器会保存教程、案例和素材的角色与 SHA-256；教学视频会额外保存讲解、软件操作、成片示例和片头片尾的分段账本，教程规则保留来源页码或时间码，视频素材做镜头切分和检索。创建商用作业时只复制明确标记为 `commercial_authorized` 的视频；只有个人学习权利或未知权利的素材不会进入商用成片。
+
+```text
+课程入库 → 教程规则抽取 → 素材镜头索引 → POST /api/course-edit-jobs
+→ 多素材 9:16 自动剪辑 → 质量门禁 → 等待本机设备或直接导入剪映
+```
+
+该主链复用本地 FFmpeg、字幕、音频路由和草稿生成器，不要求云端 Key。质量门禁通过后不再强制人工点击“批准”；阻断项失败时仍会停止交付并保留证据。
+
 ### douyin-search：抖音官方视频搜索
 
 需要：
@@ -219,6 +252,26 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 - 可选 `DINGTALK_ROBOT_CODE`
 
 未配置时直接在工作台上传。钉钉入口只接收组织已授权文件，不把一个 Webhook 当成完整文件下载授权。
+
+### remote-jianying-sync：服务器成片自动进入本机剪映
+
+剪映运行在用户的 Windows/Mac 上，Linux 服务器不能直接写它的草稿目录。因此服务器把通过质量门禁的作业放进 `awaiting_device` 队列，本机轻量同步助手负责下载 `quality-report.json` 和 `draft.zip`、再次校验 ZIP 与媒体路径、只创建新草稿、启动剪映并向服务器回报结果。
+
+普通用户从 [GitHub Releases](https://github.com/BreetyGreen/video-workbench/releases/latest) 下载与系统对应的同步助手。管理员在工作台“配置助手 → 服务器交付”生成十分钟一次性配对码；用户首次安装时输入一次，以后登录系统自动监听，不需要 Codex、Python 或仓库。
+
+开发者调试时也可以直接运行：
+
+```bash
+python scripts/sync-jianying-device.py \
+  --server-url https://video.example.com \
+  --data-dir "$HOME/Library/Application Support/VideoWorkbench Sync"
+```
+
+持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码；Windows 用当前用户 DPAPI 加密保存设备令牌，macOS 保存到权限为 `0600` 的用户目录文件。也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。
+
+当前仓库已经完成原子单次配对、令牌哈希存储、作业到设备的原子认领与隔离、下载、导入、剪映启动、幂等结果回报、退避重试、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
+
+Windows 安装脚本默认写入当前用户的 `%LOCALAPPDATA%`。它不会自动选择 `B:` 或其他盘符；若用户希望把程序或同步数据放在其他磁盘，可显式传入 `-InstallDir`、`-DataDir`，该选择只属于当前设备。macOS 数据仍存放在用户的 `~/Library/Application Support/VideoWorkbench`。
 
 ### remote-deployment：服务器、域名和 HTTPS
 

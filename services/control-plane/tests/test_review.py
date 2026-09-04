@@ -43,6 +43,56 @@ def create_review_artifacts(client: TestClient, task_id: str) -> Path:
     (task_dir / "captions.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\n字幕", encoding="utf-8")
     (task_dir / "edit-timeline.json").write_text("{}", encoding="utf-8")
     (task_dir / "render-report.json").write_text("{}", encoding="utf-8")
+    (task_dir / "tutorial-segments.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "recipe-1",
+                "segments": [
+                    {
+                        "id": "segment-operation",
+                        "source_asset_id": "tutorial-asset",
+                        "segment_type": "software_operation",
+                        "start_ms": 0,
+                        "end_ms": 3000,
+                        "transcript_text": "把素材拖到时间线",
+                        "ocr_texts": ["剪映专业版", "时间线"],
+                        "visual_cues": ["operation:时间线"],
+                        "related_rule_ids": ["rule-1"],
+                        "confidence": 0.94,
+                        "sort_order": 1,
+                    },
+                    {
+                        "id": "segment-example",
+                        "source_asset_id": "tutorial-asset",
+                        "segment_type": "finished_example",
+                        "start_ms": 4000,
+                        "end_ms": 8000,
+                        "transcript_text": "下面播放完成示例",
+                        "ocr_texts": ["成片预览"],
+                        "visual_cues": ["example:成片预览"],
+                        "related_rule_ids": ["rule-1"],
+                        "confidence": 0.95,
+                        "sort_order": 2,
+                    },
+                    {
+                        "id": "segment-lecture",
+                        "source_asset_id": "tutorial-asset",
+                        "segment_type": "lecture",
+                        "start_ms": 12000,
+                        "end_ms": 16000,
+                        "transcript_text": "前三秒先展示佩戴结果",
+                        "ocr_texts": ["课程讲解"],
+                        "visual_cues": ["lecture:钩子"],
+                        "related_rule_ids": ["rule-1"],
+                        "confidence": 0.96,
+                        "sort_order": 3,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     (task_dir / "quality-report.json").write_text(
         json.dumps(
             {
@@ -185,6 +235,12 @@ def test_review_page_displays_video_copy_evidence_and_warnings(client: TestClien
     assert ">段语音转写<" in response.text
     assert ">8<" in response.text
     assert "hook:speech:先看结果" in response.text
+    assert "教学视频分段证据" in response.text
+    assert "软件操作" in response.text
+    assert "成片示例" in response.text
+    assert "老师讲解" in response.text
+    assert "把素材拖到时间线" in response.text
+    assert "tutorial-segments.json" in response.text
     assert "captions.srt" in response.text
     assert "质量门禁" in response.text
     assert "画布符合竖屏交付规格" in response.text
@@ -197,7 +253,9 @@ def test_review_page_displays_video_copy_evidence_and_warnings(client: TestClien
     assert "字幕覆盖" in response.text
     assert ">100%<" in response.text
     assert 'data-timeline-start="' in response.text
-    assert "在剪映中导入草稿" in response.text
+    assert "导入剪映并打开" in response.text
+    assert f'/api/tasks/{task["id"]}/handoff/jianying' in response.text
+    assert 'class="draft-action" href=' not in response.text
     assert "抖音官方交付" in response.text
     assert "仅自己可见" in response.text
     assert "/static/review.js" in response.text
@@ -206,6 +264,91 @@ def test_review_page_displays_video_copy_evidence_and_warnings(client: TestClien
     assert review_script.status_code == 200
     assert "currentTime" in review_script.text
     assert "data-timeline-start" in review_script.text
+
+
+def test_review_page_warns_instead_of_crashing_on_invalid_tutorial_segment_types(client: TestClient):
+    task = create_task(client)
+    task_dir = create_review_artifacts(client, task["id"])
+    (task_dir / "tutorial-segments.json").write_text(
+        json.dumps(
+            {
+                "recipe_id": "recipe-bad",
+                "segments": [
+                    {
+                        "id": "bad-segment",
+                        "source_asset_id": "tutorial-asset",
+                        "segment_type": "lecture",
+                        "start_ms": "not-a-number",
+                        "end_ms": 1000,
+                        "transcript_text": "bad",
+                        "ocr_texts": {"unexpected": "object"},
+                        "visual_cues": [],
+                        "related_rule_ids": [],
+                        "confidence": "high",
+                        "sort_order": 1,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/review/{task['id']}")
+
+    assert response.status_code == 200
+    assert "教学分段证据不可用" in response.text
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {},
+        {"recipe_id": "recipe-only"},
+        {"recipe_id": "recipe-empty", "segments": []},
+    ],
+)
+def test_review_page_rejects_invalid_tutorial_segment_envelopes(client: TestClient, payload: object):
+    task = create_task(client)
+    task_dir = create_review_artifacts(client, task["id"])
+    (task_dir / "tutorial-segments.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    response = client.get(f"/review/{task['id']}")
+
+    assert response.status_code == 200
+    assert "教学分段证据不可用" in response.text
+
+
+def test_review_page_rejects_too_many_or_oversized_tutorial_segments(client: TestClient):
+    task = create_task(client)
+    task_dir = create_review_artifacts(client, task["id"])
+    segment = {
+        "id": "segment",
+        "source_asset_id": "tutorial-asset",
+        "segment_type": "lecture",
+        "start_ms": 0,
+        "end_ms": 1000,
+        "transcript_text": "讲解",
+        "ocr_texts": [],
+        "visual_cues": [],
+        "related_rule_ids": [],
+        "confidence": 0.9,
+        "sort_order": 1,
+    }
+    artifact_path = task_dir / "tutorial-segments.json"
+    artifact_path.write_text(
+        json.dumps({"recipe_id": "recipe-many", "segments": [segment] * 1001}),
+        encoding="utf-8",
+    )
+    too_many = client.get(f"/review/{task['id']}")
+
+    artifact_path.write_text("x" * (2 * 1024 * 1024 + 1), encoding="utf-8")
+    too_large = client.get(f"/review/{task['id']}")
+
+    assert too_many.status_code == 200
+    assert "教学分段证据不可用" in too_many.text
+    assert too_large.status_code == 200
+    assert "教学分段证据不可用" in too_large.text
 
 
 @pytest.mark.parametrize("name", ["captions.srt", "edit-timeline.json", "render-report.json"])

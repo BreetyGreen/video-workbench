@@ -57,6 +57,8 @@ class DingTalkFile:
     size_bytes: int
     download_code: str
     robot_code: str
+    role: str = "material"
+    rights_status: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,8 @@ class DownloadedFile:
     name: str
     mime_type: str
     content: bytes
+    role: str = "material"
+    rights_status: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -89,7 +93,7 @@ class Downloader(Protocol):
 
 
 class ControlPlane(Protocol):
-    def create_task(self, **kwargs) -> str: ...
+    def create_course(self, **kwargs) -> str: ...
 
 
 class DedupStore:
@@ -154,12 +158,18 @@ class DingTalkIntake:
                 return IntakeResult(status="rejected", reason="downloaded_mime_type_mismatch")
             if len(downloaded.content) > self.max_file_bytes:
                 return IntakeResult(status="rejected", reason="downloaded_file_too_large")
-            downloaded_files.append(downloaded)
+            downloaded_files.append(
+                DownloadedFile(
+                    name=downloaded.name,
+                    mime_type=downloaded.mime_type,
+                    content=downloaded.content,
+                    role=attachment.role,
+                    rights_status=attachment.rights_status,
+                )
+            )
 
-        task_id = self.control_plane.create_task(
+        course_id = self.control_plane.create_course(
             title=event.title,
-            content_type=event.content_type,
-            rights_confirmed=event.rights_confirmed,
             files=downloaded_files,
             source_type="dingtalk",
             source_user=event.sender_id,
@@ -168,4 +178,4 @@ class DingTalkIntake:
             deduplication_key=f"dingtalk:{event.message_id}",
         )
         self.dedup.mark(event.message_id)
-        return IntakeResult(status="created", task_id=task_id)
+        return IntakeResult(status="created", task_id=course_id)

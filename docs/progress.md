@@ -1,6 +1,81 @@
 # 全自动视频工作台进度
 
-最后更新：2026-08-31
+最后更新：2026-09-04
+
+## 2026-09-04 发布收口
+
+### Confirmed
+
+- 修复 Windows 剪映发现后完整控制面回归重新执行，`262 passed`；所有前端 JavaScript 入口语法检查、Python 编译、Git 差异检查和秘密模式扫描通过。
+- 已提交快照通过 `scripts/verify-fresh-clone.py --dry-run`：只使用 Git 跟踪文件解包，仓库布局、doctor、首次引导、配置页、本地模式保存和服务健康检查均通过，且没有修改真实用户目录。
+- Windows 原生诊断补齐非系统盘剪映发现：受限扫描 `B:\Apps\JianyingPro` 及用户本地安装目录，不遍历整盘；本机可识别 `B:\Apps\JianyingPro\11.3.0.14362\JianyingPro.exe`。
+- 发布候选提交 `a202448` 已推送到 `codex/video-workbench-closure` 并创建 GitHub PR #4；该远端检出版本的两组 macOS `native-contract` 与两组 Windows `windows-contract` 均通过。
+- 本地验证服务已在 `127.0.0.1:8166` 恢复；健康检查、任务 `f851d75a-817a-45b6-ba31-502bbad1b143` 审核页、预览和教学分段证据均返回 HTTP 200。
+
+## 风险与待确认
+
+- GitHub Windows/macOS Runner 已验证远端检出、依赖安装、平台契约和 fresh-clone 烟测；这仍不替代 macOS 实机剪映草稿导入与客户端打开。
+- 尚未收到用户真实付费课程文件，因此当前教程理解闭环由可复现的混合教学演示验证，不能替代真实课程样本验收。
+- 生产服务器、域名、HTTPS、钉钉组织授权、抖音开放平台权限以及 Apple/Windows 签名身份均属于外部资源；仓库可以提供检测、构建和部署入口，但不能伪造这些身份或授权。
+
+## 2026-09-02 教学视频多模态分段与真实闭环
+
+### Confirmed
+
+- 新增独立 `TutorialSegment` 证据账本，联合 ASR、首尾/场景/均匀关键帧和 OCR，把教学视频区分为老师讲解、软件操作、成片示例、片头片尾和待识别；只有老师讲解直接生成剪辑规则，操作与示例只关联同一教程中位于其前方且 30 秒内的最近规则，不会关联未来规则。
+- 课程处理 API、`learned-course-recipe.json`、`tutorial-visual-analysis.json`、`tutorial-segments.json` 和审核页均展示同一份分段证据，包含时间码、转写、OCR、视觉提示、置信度和关联规则 ID。
+- 一键教学演示现在使用 8 段与画面章节严格对齐的独立旁白，真实包含讲解、CapCut 操作标记和成片预览标记，并以 `lecture + software_operation + finished_example` 为硬门禁；成片示例中的“需要、字幕、结尾”等销售话术不会泄漏为教学规则。
+- 媒体分析关键帧固定包含首帧、尾帧和场景起点，再用全时长均匀采样补足，避免教学录屏场景变化较小时漏掉后半段；演示叠字使用 Windows、macOS、Linux 可定位的无衬线粗体回退链。
+- 公网演示素材在入库前执行完整视频解码；能被 `ffprobe` 读到但实际损坏的文件会立即切换到明确标注的合成回退素材，不再拖到最终渲染失败。
+- 课程规则缩短或放宽最终时间线后会对旁白执行第二次本地适配并重建字幕，不新增 TTS 调用。真实运行 `436aec8a-a581-455b-8d19-4cc23b22d9a0` 完成，任务 `f851d75a-817a-45b6-ba31-502bbad1b143` 记录 7 段讲解、1 段软件操作、2 段成片示例；7 条规则只来自讲解段，示例销售话术泄漏检查为 `false`。
+- 该成片为 1080×1920、H.264/AAC、20.633 秒，质量状态 `pass`、0 阻断；旁白 20.742 秒，与时间线相差 0.109 秒。课程规则实际改变平均镜头时长、镜头数量和 CTA 结尾，两个最终素材均来自 Wikimedia Commons 且标记为 `commercial_authorized`。
+- 最新完整回归基于上述最终代码执行，`261 passed`；独立代码审查未发现剩余 P0 阻断。
+
+### Open / External user action
+
+- 当前分类是可复现的本地多模态规则，不是通用视觉大模型。老师边讲边操作、画中画和快速交替示例仍可能出现低置信度或按主证据归类，需要用户提供真实课程后继续做样本验收。
+- 本轮在 Windows 完成真实演示；macOS 的本地字体、剪映/CapCut 草稿目录、签名、公证和客户端打开仍需 Apple 机器或 CI 产物实机验证。
+
+## 2026-09-01 教学视频理解到剪映真实闭环
+
+### Confirmed
+
+- 新增可重复的一键教学演示：独立教学视频生成、真实 ASR、时间码规则抽取、独立授权素材准备、基线/规则时间线对比、渲染、质量门禁和剪映交付均由同一运行记录串联。
+- 教程规则保存原文证据、起止时间、置信度和转写 SHA-256；最终镜头保存命中的规则 ID，并生成 `course-rule-trace.json` 与 `course-comparison.json`。规则未造成至少两项可观察剪辑变化时以 `course_rules_not_applied` 失败。
+- 真实演示运行 `4245416a-20ed-4c5c-afdc-324a0a2c2427` 完成；教程由火山 BigASR `volc.bigasr.auc_turbo` 转写为 8 个分段并抽取 9 条规则。规则实际改变了平均镜头时长、镜头数量和 CTA 结尾，共留下 3 条命中追踪。
+- 成片任务 `05753740-7a36-41d0-b406-c8034d96b712` 为 1080×1920、H.264/AAC、20.8 秒；黑场、长静音、画布、音视频流、时长和字幕等阻断项全部通过。
+- 演示素材账本锁定两条 Wikimedia Commons 视频的来源、许可与 SHA-256；教学画面没有进入最终成片。
+- Windows 本机直跑现在会区分宿主草稿目录与 Docker 挂载目录。上述任务已导入 `B:\JianyingData\Drafts\JianyingPro Drafts\宠物护理前后对比-5285d6a9-05753740`，15 个文件齐全、11 条媒体引用可读取，打开请求为 `launched`，作业状态为 `delivered_to_jianying`。
+
+### Open / External user action
+
+- 本轮真实教程 ASR 使用了当前机器已配置的 BigASR；fresh clone 在零 Key 条件下会使用本地 Whisper，首次需要联网下载模型。零 Key路径由自动化测试覆盖，但本轮没有在一台全新离线 Mac 上重复下载模型。
+- Windows 剪映已被真实拉起；最终画面、字体与当前剪映版本兼容性仍应由人在客户端看一遍。macOS 的 Finder/CapCut/剪映草稿路径、Gatekeeper、签名与公证仍需 Apple 机器或 CI 产物实机验收。
+- 当前改动位于 `codex/video-workbench-closure` 工作树；在合并并推送到远端默认分支之前，外部用户 clone 公共仓库不会自动获得本轮最新闭环。
+
+## 2026-09-01 课程自动剪辑与服务器到剪映闭环
+
+### Confirmed
+
+- 新增 `CourseEditJob` 持久化作业和 `POST/GET /api/course-edit-jobs`：锁定课程最新配方、复制课程视频到独立任务目录并执行现有真实渲染主链。
+- 商用作业只选择 `commercial_authorized` 课程视频；没有合规视频时返回 `commercial_material_not_authorized`，不会回退到未知权利素材。
+- 质量报告零阻断后自动跳过强制审核；阻断项存在时保持 `quality_blocked`，不进入设备队列。
+- 新增待设备队列、设备回报接口和跨平台 `scripts/sync-jianying-device.py`。助手分块下载质量报告/草稿，复用 ZIP 安全校验与原子新建草稿逻辑，导入后回报服务器。
+- 新增十分钟有效、单次使用且原子消费的设备配对码；服务器只保存 HMAC-SHA256 令牌摘要。待交付作业由首次拉取它的设备原子认领，此后只有该设备能查看、下载和回报，已完成作业不能被迟到的失败回报改回失败。Caddy 仅对配对和设备 API 免 Basic Auth，其他页面与管理接口继续受保护。
+- 真实验收作业 `92931343-87da-4e97-9fb4-693fc4ebfb19` 使用模拟钉钉课程的 3 条商用授权视频，生成任务 `eda6537c-18bd-4556-a15c-526c10aba54d`：3 段/3 素材源、9 秒、1080×1920、H.264/AAC，10 项门禁通过、0 阻断。
+- 同步助手已把该草稿导入 `B:\JianyingData\Drafts\JianyingPro Drafts\课程自动剪辑验收-无云-dd74f6bb-eda6537c`，服务器状态回报为 `delivered_to_jianying`，剪映启动请求状态为 `launched`。
+- 第二条真实作业 `a1542067-da9c-49f9-bd6d-e5ccd91266a2` 完成一次性配对、设备令牌认证、专用队列下载、媒体校验、导入与回报；草稿位于 `B:\JianyingData\Drafts\JianyingPro Drafts\课程设备配对验收-49675c0e-4d046c8e`，启动状态为 `launched`。
+- 钉钉 8.2.0.260119001 已安装在 `B:\DingDing` 并运行；主程序 Authenticode 状态为 `Valid`，新增 `scripts/doctor-dingtalk.ps1` 做只读检查。
+- 新增 PyInstaller 6.22.2 锁定构建、Windows/macOS 安装脚本、登录自启和 `sync-helper-v*` GitHub Release 工作流。Windows 单文件产物已真实构建并执行完整烟测：返回码 0，识别 `B:\Apps\JianyingPro\JianyingPro.exe`，确认 `B:\JianyingData\Drafts\JianyingPro Drafts` 可写并完成服务端队列请求。
+- 配置助手新增“服务器交付”区域：管理员可直接生成十分钟一次性配对码，普通用户从 Release 下载助手后只配对一次，不再需要 Codex 常驻。
+
+### Open / External user action
+
+- 真正从钉钉组织群自动收历史网课文件，仍需要管理员创建企业内部应用、Stream 机器人并授权文件下载；当前模拟入口只替代钉钉事件来源，后续处理全部是真实代码。
+- 生产服务器、域名、HTTPS 和设备访问控制尚未由用户提供，因此本次服务器/设备闭环在本机两个独立数据目录与 HTTP loopback 上验收。
+- Windows/macOS 单文件构建和开机自启已实现；正式面向普通用户公开分发仍需仓库所有者提供 Authenticode 与 Apple Developer ID/公证身份。macOS 二进制及 Gatekeeper/剪映实机仍需在 Apple 机器或 CI 产物上验收。
+- 合成验收素材没有可转写人声，因此本次关闭 ASR/OCR，验证的是课程规则、授权筛选、多素材剪辑、渲染、质检和剪映交付；真实课程教程的视频转写质量仍需用户提供课程文件后验收。
+- 当前生产形态仍是单工作区、单实例 SQLite 和同步作业执行，适合首个受控团队部署；在开放多租户或高并发之前，还需拆分持久任务队列、对象存储和数据库，并补充租户级作业路由。
 
 ## 2026-08-31 clone 前能力与配置收口
 

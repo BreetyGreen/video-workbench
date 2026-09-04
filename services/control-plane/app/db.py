@@ -27,9 +27,41 @@ class Database:
                 "delivery_state": "ALTER TABLE video_tasks ADD COLUMN delivery_state VARCHAR",
                 "delivery_provider_id": "ALTER TABLE video_tasks ADD COLUMN delivery_provider_id VARCHAR",
                 "delivered_at": "ALTER TABLE video_tasks ADD COLUMN delivered_at DATETIME",
+                "course_recipe_id": "ALTER TABLE video_tasks ADD COLUMN course_recipe_id VARCHAR",
             }
             for column, statement in additions.items():
                 if column not in existing:
+                    connection.execute(text(statement))
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_video_tasks_course_recipe_id ON video_tasks (course_recipe_id)")
+            )
+            recipe_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(editing_recipes)"))
+            }
+            recipe_additions = {
+                "tutorial_asset_id": "ALTER TABLE editing_recipes ADD COLUMN tutorial_asset_id VARCHAR",
+                "transcript_sha256": "ALTER TABLE editing_recipes ADD COLUMN transcript_sha256 VARCHAR NOT NULL DEFAULT ''",
+            }
+            for column, statement in recipe_additions.items():
+                if column not in recipe_existing:
+                    connection.execute(text(statement))
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_editing_recipes_tutorial_asset_id ON editing_recipes (tutorial_asset_id)")
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_editing_recipes_transcript_sha256 ON editing_recipes (transcript_sha256)")
+            )
+            rule_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(editing_rules)"))
+            }
+            rule_additions = {
+                "evidence_text": "ALTER TABLE editing_rules ADD COLUMN evidence_text VARCHAR NOT NULL DEFAULT ''",
+                "confidence": "ALTER TABLE editing_rules ADD COLUMN confidence FLOAT NOT NULL DEFAULT 1.0",
+            }
+            for column, statement in rule_additions.items():
+                if column not in rule_existing:
                     connection.execute(text(statement))
             licensed_existing = {
                 row[1]
@@ -44,6 +76,13 @@ class Database:
             for column, statement in licensed_additions.items():
                 if column not in licensed_existing:
                     connection.execute(text(statement))
+            course_job_existing = {
+                row[1]
+                for row in connection.execute(text("PRAGMA table_info(course_edit_jobs)"))
+            }
+            if "device_id" not in course_job_existing:
+                connection.execute(text("ALTER TABLE course_edit_jobs ADD COLUMN device_id VARCHAR"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_course_edit_jobs_device_id ON course_edit_jobs (device_id)"))
 
     def session(self) -> Iterator[Session]:
         with Session(self.engine) as session:

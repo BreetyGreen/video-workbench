@@ -155,7 +155,15 @@ def test_media_analysis_combines_probe_transcript_scenes_frames_and_ocr(
     assert analysis.transcript.language == "zh"
     assert len(analysis.scenes) >= 1
     assert len(analysis.silences) >= 1
-    assert len(analysis.frames) >= 2
+    assert len(analysis.frames) == 4
+    assert analysis.frames[0].timestamp_seconds <= 0.05
+    assert analysis.frames[-1].timestamp_seconds > 1.6
+    assert any(
+        abs(frame.timestamp_seconds - scene.start_seconds) < 0.1
+        for frame in analysis.frames
+        for scene in analysis.scenes
+        if scene.start_seconds > 0.1
+    )
     assert any(frame.ocr_texts == ["画面文字"] for frame in analysis.frames)
     assert all(Path(frame.image_path).is_file() for frame in analysis.frames)
 

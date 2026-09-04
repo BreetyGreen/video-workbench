@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import create_app
+
+
+def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'control-plane.db').as_posix()}",
+    )
+    with TestClient(create_app(settings)) as client:
+        created = client.post(
+            "/api/courses/intake",
+            data={
+                "title": "宠物课",
+                "source_type": "fixture",
+                "source_message_id": "process-1",
+                "asset_roles": json.dumps(["tutorial", "material"]),
+                "rights_statuses": json.dumps(["personal_learning", "commercial_authorized"]),
+            },
+            files=[
+                (
+                    "files",
+                    (
+                        "tutorial.txt",
+                        "0-3 秒先展示结果制造钩子。\n3-10 秒单镜头不超过 2 秒。".encode(),
+                        "text/plain",
+                    ),
+                ),
+                ("files", ("material.mp4", ffmpeg_fixture.read_bytes(), "video/mp4")),
+            ],
+        ).json()
+
+        response = client.post(f"/api/courses/{created['id']}/process")
+        search = client.get(
+            f"/api/courses/{created['id']}/shots/search",
+            params={"q": "material", "commercial": "true"},
+        )
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["course_id"] == created["id"]
+    assert result["version"] == 1
+    assert {rule["category"] for rule in result["rules"]} == {"hook", "pacing"}
+    assert all(rule["source_asset_id"] for rule in result["rules"])
+    assert all(rule["source_page"] for rule in result["rules"])
+    assert all(rule["evidence_text"] for rule in result["rules"])
+    assert all(0 <= rule["confidence"] <= 1 for rule in result["rules"])
+    assert [segment["segment_type"] for segment in result["segments"]] == ["lecture", "lecture"]
+    assert all(segment["transcript_text"] for segment in result["segments"])
+    assert all(segment["related_rule_ids"] for segment in result["segments"])
+    assert all(isinstance(segment["ocr_texts"], list) for segment in result["segments"])
+    assert result["tutorial_asset_id"]
+    assert len(result["transcript_sha256"]) == 64
+    assert result["shot_count"] >= 1
+    assert search.status_code == 200
+    assert len(search.json()) >= 1
+    assert all(item["rights_status"] == "commercial_authorized" for item in search.json())

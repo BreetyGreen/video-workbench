@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 import hashlib
+import json
 import logging
 from pathlib import Path
 import platform as host_platform
@@ -10,11 +11,12 @@ import secrets
 import shutil
 from typing import Callable
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session
+from sqlalchemy import update
+from sqlmodel import Session, select
 
 from app.adapters.dify import DifyClient
 from app.adapters.douyin import DouyinSearchClient
@@ -27,8 +29,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import LicensedAsset, TaskStatus
-from app.platforms.jianying import discover_jianying
+from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun, TutorialSegment
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -51,8 +52,22 @@ from app.schemas.automation import (
 )
 from app.schemas.usage import CloudUsageSettingsUpdate
 from app.schemas.voice import VoicePreviewRequest
+from app.schemas.courses import CourseAssetRead, CourseRead
+from app.schemas.course_knowledge import (
+    CourseEditJobCreate,
+    CourseEditJobHandoffUpdate,
+    CourseEditJobRead,
+    EditingRecipeRead,
+    EditingRuleRead,
+    ShotSearchResultRead,
+    TutorialSegmentArtifactRead,
+    TutorialSegmentRead,
+)
 from app.schemas.materials import MaterialAcquisitionRequest
+from app.schemas.provider_settings import ProviderSettingsUpdate
 from app.schemas.setup import SetupPreferencesUpdate
+from app.schemas.device_delivery import DevicePairRead, DevicePairRequest, PairingCodeRead
+from app.schemas.tutorial_demo import TutorialDemoRunRead
 from app.services.automation_service import (
     AutomationScheduler,
     DailyAutomation,
@@ -80,7 +95,28 @@ from app.services.task_service import (
 from app.services.usage_service import UsageService
 from app.services.voice_catalog_service import VoiceCatalogService
 from app.services.setup_service import SetupService
+from app.services.provider_settings_service import ProviderSettingsService
+from app.services.jianying_runtime_service import JianyingRuntimeService
+from app.services.jianying_handoff_service import JianyingHandoffService
+from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
+from app.services.tutorial_understanding_service import TutorialUnderstandingService
+from app.services.course_material_analysis_service import CourseMaterialAnalysisService
+from app.services.course_material_search_service import CourseMaterialSearchService
+from app.services.course_edit_job_service import CourseEditJobService
+from app.services.device_delivery_service import DeviceDeliveryService
+from app.services.tutorial_demo_assets import TutorialDemoAssetService
+from app.services.tutorial_demo_service import TutorialDemoService
 logger = logging.getLogger(__name__)
+
+
+def _bounded_string_list(raw: str | None, *, maximum_items: int = 200) -> list[str]:
+    try:
+        payload = json.loads(raw or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list) or len(payload) > maximum_items:
+        return []
+    return [item for item in payload if isinstance(item, str) and len(item) <= 2_000]
 
 
 def create_app(
@@ -91,9 +127,24 @@ def create_app(
     usage_client_factory: Callable[[str, str], VolcengineUsageClient] | None = None,
     douyin_search_client: DouyinSearchClient | None = None,
     douyin_publish_client: DouyinPublishClient | None = None,
+    pipeline_service_override: object | None = None,
+    jianying_handoff_override: object | None = None,
+    tutorial_demo_service_override: object | None = None,
 ) -> FastAPI:
     app_settings = settings or Settings()
     database = Database(app_settings.database_url)
+    database.create_all()
+    usage_key = app_settings.usage_secret_master_key.strip()
+    if not usage_key:
+        key_path = app_settings.data_dir / ".usage-secret-key"
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        if not key_path.exists():
+            key_path.write_text(secrets.token_urlsafe(32), encoding="utf-8")
+        usage_key = key_path.read_text(encoding="utf-8").strip()
+    provider_settings = ProviderSettingsService(usage_key)
+    with Session(database.engine) as provider_session:
+        provider_settings.import_legacy_settings(provider_session, app_settings)
+        provider_settings.apply(provider_session, app_settings)
     review_service = ReviewService(app_settings.artifact_dir)
     analysis_client = dify_client or DifyClient(app_settings)
     speech_client = tts_client or VolcanoTTSClient(
@@ -104,7 +155,11 @@ def create_app(
         timeout_seconds=app_settings.volcano_tts_timeout_seconds,
         ffprobe_bin=app_settings.ffprobe_bin,
     )
-    pipeline_service = PipelineService(app_settings, dify=analysis_client, tts=speech_client)
+    pipeline_service = pipeline_service_override or PipelineService(
+        app_settings,
+        dify=analysis_client,
+        tts=speech_client,
+    )
     douyin_client = douyin_search_client or DouyinSearchClient(app_settings)
     publish_client = douyin_publish_client or DouyinPublishClient()
     douyin_delivery = DouyinDeliveryService(publish_client, app_settings.artifact_dir)
@@ -149,17 +204,62 @@ def create_app(
     templates.env.globals["workbench_asset_version"] = hashlib.sha256(
         (app_dir / "static" / "workbench.js").read_bytes()
     ).hexdigest()[:12]
-    usage_key = app_settings.usage_secret_master_key.strip()
-    if not usage_key:
-        key_path = app_settings.data_dir / ".usage-secret-key"
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        if not key_path.exists():
-            key_path.write_text(secrets.token_urlsafe(32), encoding="utf-8")
-        usage_key = key_path.read_text(encoding="utf-8").strip()
     cloud_usage = CloudUsageService(usage_key, usage_client_factory)
     voice_catalog = VoiceCatalogService(speech_client.voice_type)
     voice_usage = UsageService()
     setup_service = SetupService(app_settings.data_dir)
+    jianying_runtime = JianyingRuntimeService(app_settings.data_dir)
+    jianying_handoff = jianying_handoff_override or JianyingHandoffService(
+        app_settings.data_dir,
+        app_settings.artifact_dir,
+        jianying_runtime,
+    )
+    course_intake = CourseIntakeService(
+        app_settings.data_dir,
+        app_settings.course_max_file_bytes,
+    )
+    pipeline_analyzer = getattr(pipeline_service, "analyzer", None)
+    tutorial_understanding = TutorialUnderstandingService(
+        getattr(pipeline_analyzer, "transcriber", None),
+        media_analyzer=pipeline_analyzer,
+    )
+    course_material_analysis = CourseMaterialAnalysisService(app_settings)
+    course_material_search = CourseMaterialSearchService()
+    course_edit_jobs = CourseEditJobService(app_settings, pipeline_service, jianying_handoff)
+    device_delivery = DeviceDeliveryService(usage_key)
+    tutorial_demo = tutorial_demo_service_override or TutorialDemoService(
+        app_settings,
+        database,
+        TutorialDemoAssetService(app_settings, tts=speech_client),
+        tutorial_understanding,
+        course_edit_jobs,
+    )
+
+    def tutorial_demo_read(run: TutorialDemoRun) -> TutorialDemoRunRead:
+        try:
+            artifacts = json.loads(run.artifacts_json or "{}")
+        except json.JSONDecodeError:
+            artifacts = {}
+        return TutorialDemoRunRead(
+            id=run.id,
+            state=run.state,
+            stage=run.stage,
+            course_id=run.course_id,
+            recipe_id=run.recipe_id,
+            job_id=run.job_id,
+            task_id=run.task_id,
+            error_code=run.error_code,
+            artifacts=artifacts if isinstance(artifacts, dict) else {},
+            created_at=run.created_at,
+            updated_at=run.updated_at,
+            finished_at=run.finished_at,
+        )
+
+    def course_read(course, assets) -> CourseRead:
+        return CourseRead(
+            **course.model_dump(),
+            assets=[CourseAssetRead.model_validate(asset) for asset in assets],
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -183,6 +283,7 @@ def create_app(
     app.state.settings = app_settings
     app.state.database = database
     app.state.cloud_usage = cloud_usage
+    app.state.provider_settings = provider_settings
     app.state.automation_scheduler_started = False
     app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
 
@@ -192,10 +293,10 @@ def create_app(
     def local_runtime_snapshot() -> dict:
         system = host_platform.system()
         runtime_paths = resolve_runtime_paths(system=system, home=Path.home())
-        location = discover_jianying(home=Path.home(), system=system)
+        jianying = jianying_runtime.snapshot()
         return {
-            "platform": system,
-            "architecture": host_platform.machine(),
+            "platform": jianying.get("platform") or system,
+            "architecture": jianying.get("architecture") or host_platform.machine(),
             "runtime": {
                 "data_dir": str(app_settings.data_dir),
                 "inbox_dir": str(runtime_paths.inbox_dir),
@@ -204,12 +305,7 @@ def create_app(
                 "ffmpeg": shutil.which(app_settings.ffmpeg_bin) is not None,
                 "ffprobe": shutil.which(app_settings.ffprobe_bin) is not None,
             },
-            "jianying": {
-                "installed": location.installed,
-                "app_path": str(location.app_path) if location.app_path else None,
-                "draft_root": str(location.draft_root) if location.draft_root else None,
-                "needs_folder_picker": location.needs_folder_picker,
-            },
+            "jianying": jianying,
         }
 
     def material_status_snapshot(session: Session) -> dict:
@@ -348,9 +444,65 @@ def create_app(
             raise HTTPException(status_code=404, detail={"code": "unknown_setup_provider"})
         return cards[provider_id]
 
+    @app.post(
+        "/api/tutorial-learning-demo",
+        response_model=TutorialDemoRunRead,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    def start_tutorial_learning_demo(
+        background_tasks: BackgroundTasks,
+        session: Session = Depends(session_dependency),
+    ) -> TutorialDemoRunRead:
+        run = tutorial_demo.create(session)
+        background_tasks.add_task(tutorial_demo.execute, run.id)
+        return tutorial_demo_read(run)
+
+    @app.get("/api/tutorial-learning-demo/{run_id}", response_model=TutorialDemoRunRead)
+    def read_tutorial_learning_demo(
+        run_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> TutorialDemoRunRead:
+        run = session.get(TutorialDemoRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail={"code": "tutorial_demo_not_found"})
+        return tutorial_demo_read(run)
+
     @app.get("/settings/cloud-usage", response_class=HTMLResponse)
     def cloud_usage_settings_page(request: Request):
         return templates.TemplateResponse(request, "cloud_usage_settings.html", {})
+
+    @app.get("/settings/providers", response_class=HTMLResponse)
+    def provider_settings_page(request: Request):
+        return templates.TemplateResponse(request, "provider_settings.html", {})
+
+    @app.get("/api/provider-settings")
+    def read_provider_settings(session: Session = Depends(session_dependency)):
+        return provider_settings.status(session)
+
+    @app.put("/api/provider-settings/{provider_id}")
+    def save_provider_settings(
+        provider_id: str,
+        update: ProviderSettingsUpdate,
+        session: Session = Depends(session_dependency),
+    ):
+        try:
+            return provider_settings.save(
+                session,
+                provider_id,
+                values=update.values,
+                clear_fields=update.clear_fields,
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail={"code": "unknown_provider"}) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail={"code": str(error)}) from error
+
+    @app.delete("/api/provider-settings/{provider_id}")
+    def delete_provider_settings(provider_id: str, session: Session = Depends(session_dependency)):
+        try:
+            return provider_settings.delete(session, provider_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail={"code": "unknown_provider"}) from error
 
     @app.get("/voices", response_class=HTMLResponse)
     def voice_center_page(request: Request):
@@ -781,6 +933,297 @@ def create_app(
             ) from error
         return TaskRead.model_validate(task)
 
+    @app.post("/api/courses/intake", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
+    def post_course_intake(
+        response: Response,
+        title: str = Form(min_length=1, max_length=200),
+        source_type: str = Form(default="dingtalk", max_length=100),
+        source_user: str = Form(default="", max_length=200),
+        source_conversation: str = Form(default="", max_length=200),
+        source_message_id: str = Form(min_length=1, max_length=300),
+        asset_roles: str = Form(),
+        rights_statuses: str = Form(),
+        files: list[UploadFile] = File(min_length=1),
+        session: Session = Depends(session_dependency),
+    ) -> CourseRead:
+        try:
+            roles = [CourseAssetRole(value) for value in json.loads(asset_roles)]
+            rights = [RightsStatus(value) for value in json.loads(rights_statuses)]
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_course_asset_metadata"},
+            ) from error
+        try:
+            course, assets, created = course_intake.create_course(
+                session,
+                title=title,
+                source_type=source_type,
+                source_user=source_user,
+                source_conversation=source_conversation,
+                source_message_id=source_message_id,
+                files=files,
+                roles=roles,
+                rights_statuses=rights,
+            )
+        except CourseIntakeError as error:
+            status_code = 413 if error.code == "course_asset_too_large" else 422
+            if error.code == "unsupported_course_asset_type":
+                status_code = 415
+            raise HTTPException(status_code=status_code, detail={"code": error.code}) from error
+        if not created:
+            response.status_code = status.HTTP_200_OK
+        return course_read(course, assets)
+
+    @app.get("/api/courses/{course_id}", response_model=CourseRead)
+    def read_course(
+        course_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> CourseRead:
+        result = course_intake.get_course(session, course_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail={"code": "course_not_found"})
+        return course_read(*result)
+
+    @app.post("/api/courses/{course_id}/process", response_model=EditingRecipeRead)
+    def process_course(
+        course_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> EditingRecipeRead:
+        try:
+            recipe = tutorial_understanding.process(session, course_id)
+        except ValueError as error:
+            code = str(error)
+            status_code = 404 if code == "course_not_found" else 422
+            raise HTTPException(status_code=status_code, detail={"code": code}) from error
+        rules = list(
+            session.exec(
+                select(EditingRule)
+                .where(EditingRule.recipe_id == recipe.id)
+                .order_by(EditingRule.sort_order, EditingRule.id)
+            ).all()
+        )
+        segments = list(
+            session.exec(
+                select(TutorialSegment)
+                .where(TutorialSegment.recipe_id == recipe.id)
+                .order_by(TutorialSegment.sort_order, TutorialSegment.id)
+            ).all()
+        )
+        material_assets = list(
+            session.exec(
+                select(CourseAsset)
+                .where(CourseAsset.course_id == course_id)
+                .where(CourseAsset.role == CourseAssetRole.MATERIAL)
+            ).all()
+        )
+        shot_count = 0
+        for asset in material_assets:
+            if asset.mime_type.startswith("video/"):
+                shot_count += len(course_material_analysis.analyze_asset(session, asset.id))
+        session.refresh(recipe)
+        return EditingRecipeRead(
+            **recipe.model_dump(),
+            rules=[EditingRuleRead.model_validate(rule) for rule in rules],
+            segments=[
+                TutorialSegmentRead(
+                    id=segment.id,
+                    source_asset_id=segment.source_asset_id,
+                    segment_type=segment.segment_type.value,
+                    start_ms=segment.start_ms,
+                    end_ms=segment.end_ms,
+                    source_page=segment.source_page,
+                    transcript_text=segment.transcript_text,
+                    ocr_texts=_bounded_string_list(segment.ocr_text_json),
+                    visual_cues=_bounded_string_list(segment.visual_cues_json),
+                    related_rule_ids=_bounded_string_list(segment.related_rule_ids_json),
+                    confidence=segment.confidence,
+                    sort_order=segment.sort_order,
+                )
+                for segment in segments
+            ],
+            shot_count=shot_count,
+        )
+
+    @app.get("/api/courses/{course_id}/shots/search", response_model=list[ShotSearchResultRead])
+    def search_course_shots(
+        course_id: str,
+        q: str = "",
+        commercial: bool = False,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[ShotSearchResultRead]:
+        results = course_material_search.search(
+            session,
+            course_id,
+            q,
+            commercial=commercial,
+            limit=limit,
+        )
+        return [ShotSearchResultRead(**result.__dict__) for result in results]
+
+    @app.post("/api/course-edit-jobs", response_model=CourseEditJobRead, status_code=status.HTTP_201_CREATED)
+    def create_course_edit_job(
+        request: CourseEditJobCreate,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        try:
+            result = course_edit_jobs.run(
+                session,
+                course_id=request.course_id,
+                title=request.title,
+                content_type=request.content_type,
+                commercial=request.commercial,
+                quality_profile=request.quality_profile,
+                cloud_processing_allowed=request.cloud_processing_allowed,
+            )
+        except ValueError as error:
+            code = str(error)
+            status_code = 404 if code == "course_not_found" else 422
+            raise HTTPException(status_code=status_code, detail={"code": code}) from error
+        return CourseEditJobRead.model_validate(result.job)
+
+    @app.get("/api/course-edit-jobs", response_model=list[CourseEditJobRead])
+    def list_course_edit_jobs(
+        state: str | None = None,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[CourseEditJobRead]:
+        statement = select(CourseEditJob)
+        if state:
+            statement = statement.where(CourseEditJob.state == state)
+        statement = statement.order_by(CourseEditJob.created_at).limit(min(max(limit, 1), 100))
+        return [CourseEditJobRead.model_validate(item) for item in session.exec(statement).all()]
+
+    @app.get("/api/course-edit-jobs/{job_id}", response_model=CourseEditJobRead)
+    def read_course_edit_job(
+        job_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        job = session.get(CourseEditJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        return CourseEditJobRead.model_validate(job)
+
+    @app.post("/api/course-edit-jobs/{job_id}/device-handoff", response_model=CourseEditJobRead)
+    def update_course_edit_job_handoff(
+        job_id: str,
+        update: CourseEditJobHandoffUpdate,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        job = session.get(CourseEditJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        if job.state not in {"awaiting_device", "handoff_failed", "delivered_to_jianying"}:
+            raise HTTPException(status_code=409, detail={"code": "job_not_awaiting_device"})
+        job.handoff_status = update.status
+        job.state = "delivered_to_jianying" if update.status == "imported" else "handoff_failed"
+        job.error_code = "" if update.status == "imported" else (update.error_code or "device_handoff_failed")
+        job.updated_at = datetime.now(UTC)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return CourseEditJobRead.model_validate(job)
+
+    def authenticated_device(request: Request, session: Session):
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            raise HTTPException(status_code=401, detail={"code": "device_token_required"})
+        try:
+            return device_delivery.authenticate(session, token)
+        except ValueError as error:
+            raise HTTPException(status_code=401, detail={"code": str(error)}) from error
+
+    @app.post("/api/devices/pairing-codes", response_model=PairingCodeRead, status_code=status.HTTP_201_CREATED)
+    def issue_device_pairing_code(
+        session: Session = Depends(session_dependency),
+    ) -> PairingCodeRead:
+        issued = device_delivery.issue_code(session)
+        return PairingCodeRead(id=issued.id, code=issued.code, expires_at=issued.expires_at)
+
+    @app.post("/api/devices/pair", response_model=DevicePairRead, status_code=status.HTTP_201_CREATED)
+    def pair_delivery_device(
+        request: DevicePairRequest,
+        session: Session = Depends(session_dependency),
+    ) -> DevicePairRead:
+        try:
+            paired = device_delivery.pair(session, code=request.code, name=request.name)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail={"code": str(error)}) from error
+        return DevicePairRead(device_id=paired.device.id, name=paired.device.name, token=paired.token)
+
+    @app.get("/api/devices/me/course-edit-jobs", response_model=list[CourseEditJobRead])
+    def list_device_course_edit_jobs(
+        request: Request,
+        limit: int = 20,
+        session: Session = Depends(session_dependency),
+    ) -> list[CourseEditJobRead]:
+        device = authenticated_device(request, session)
+        session.exec(
+            update(CourseEditJob)
+            .where(CourseEditJob.state == "awaiting_device")
+            .where(CourseEditJob.device_id.is_(None))
+            .values(device_id=device.id, updated_at=datetime.now(UTC))
+        )
+        session.commit()
+        statement = (
+            select(CourseEditJob)
+            .where(CourseEditJob.state.in_({"awaiting_device", "handoff_failed"}))
+            .where(CourseEditJob.device_id == device.id)
+            .order_by(CourseEditJob.created_at)
+            .limit(min(max(limit, 1), 100))
+        )
+        return [CourseEditJobRead.model_validate(item) for item in session.exec(statement).all()]
+
+    @app.get("/api/devices/me/course-edit-jobs/{job_id}/artifacts/{artifact_name}")
+    def download_device_job_artifact(
+        job_id: str,
+        artifact_name: str,
+        request: Request,
+        session: Session = Depends(session_dependency),
+    ) -> FileResponse:
+        device = authenticated_device(request, session)
+        job = session.get(CourseEditJob, job_id)
+        if (
+            job is None
+            or job.device_id != device.id
+            or not job.task_id
+            or job.state not in {"awaiting_device", "handoff_failed"}
+        ):
+            raise HTTPException(status_code=404, detail={"code": "device_delivery_not_found"})
+        if artifact_name not in {"draft.zip", "quality-report.json"}:
+            raise HTTPException(status_code=404, detail={"code": "artifact_not_found"})
+        try:
+            path = review_service.artifact_path(job.task_id, artifact_name)
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=404, detail={"code": "artifact_not_found"}) from error
+        return FileResponse(path, filename=path.name)
+
+    @app.post("/api/devices/me/course-edit-jobs/{job_id}/handoff", response_model=CourseEditJobRead)
+    def report_device_job_handoff(
+        job_id: str,
+        update: CourseEditJobHandoffUpdate,
+        request: Request,
+        session: Session = Depends(session_dependency),
+    ) -> CourseEditJobRead:
+        device = authenticated_device(request, session)
+        job = session.get(CourseEditJob, job_id)
+        if job is None or job.device_id != device.id:
+            raise HTTPException(status_code=404, detail={"code": "course_edit_job_not_found"})
+        if job.state == "delivered_to_jianying" and update.status == "imported":
+            return CourseEditJobRead.model_validate(job)
+        if job.state not in {"awaiting_device", "handoff_failed"}:
+            raise HTTPException(status_code=409, detail={"code": "job_not_awaiting_device"})
+        job.handoff_status = update.status
+        job.state = "delivered_to_jianying" if update.status == "imported" else "handoff_failed"
+        job.error_code = "" if update.status == "imported" else (update.error_code or "device_handoff_failed")
+        job.updated_at = datetime.now(UTC)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return CourseEditJobRead.model_validate(job)
+
     @app.get("/api/tasks", response_model=list[TaskRead])
     def read_tasks(
         limit: int = 100,
@@ -878,7 +1321,32 @@ def create_app(
                 status_code=500,
                 detail={"code": "processing_failed", "message": str(error)},
             ) from error
+        try:
+            jianying_handoff.import_task(task_id)
+        except Exception:
+            logger.exception("Automatic Jianying handoff failed for task %s", task_id)
         return TaskRead.model_validate(processed)
+
+    @app.get("/api/tasks/{task_id}/handoff/jianying")
+    def read_jianying_handoff(
+        task_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> dict[str, object]:
+        if get_task(session, task_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "task_not_found"})
+        return jianying_handoff.status(task_id)
+
+    @app.post("/api/tasks/{task_id}/handoff/jianying")
+    def import_jianying_handoff(
+        task_id: str,
+        session: Session = Depends(session_dependency),
+    ) -> dict[str, object]:
+        if get_task(session, task_id) is None:
+            raise HTTPException(status_code=404, detail={"code": "task_not_found"})
+        result = jianying_handoff.import_task(task_id)
+        if result.get("status") == "failed":
+            raise HTTPException(status_code=409, detail=result)
+        return result
 
     @app.post("/api/tasks/{task_id}/review", response_model=TaskRead)
     def review_task(
@@ -1005,6 +1473,19 @@ def create_app(
             {"kind": "warning", "status": "warn", "title": "生成警告", "message": str(item), "seek_seconds": None}
             for item in warnings
         )
+        tutorial_segments_path = bundle.task_dir / "tutorial-segments.json"
+        tutorial_segments: list[dict[str, object]] = []
+        tutorial_segments_invalid = False
+        if tutorial_segments_path.is_file():
+            try:
+                if tutorial_segments_path.stat().st_size > 2 * 1024 * 1024:
+                    raise ValueError("tutorial segment artifact is too large")
+                segment_payload = json.loads(tutorial_segments_path.read_text(encoding="utf-8"))
+                validated_artifact = TutorialSegmentArtifactRead.model_validate(segment_payload)
+                tutorial_segments = [item.model_dump() for item in validated_artifact.segments]
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                tutorial_segments_invalid = True
+                tutorial_segments = []
         return templates.TemplateResponse(
             request,
             "review.html",
@@ -1028,6 +1509,16 @@ def create_app(
                 "narration_coverage": narration_coverage,
                 "subtitle_coverage": narration_coverage if audio_route.get("voiceover_used") else None,
                 "review_issues": review_issues,
+                "jianying_handoff": jianying_handoff.status(task_id),
+                "tutorial_segments": tutorial_segments,
+                "tutorial_segments_invalid": tutorial_segments_invalid,
+                "tutorial_segment_labels": {
+                    "lecture": "老师讲解",
+                    "software_operation": "软件操作",
+                    "finished_example": "成片示例",
+                    "intro_outro": "片头片尾",
+                    "unknown": "待识别",
+                },
             },
         )
 

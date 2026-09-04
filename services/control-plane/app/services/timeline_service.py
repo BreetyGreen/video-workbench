@@ -7,6 +7,7 @@ from app.schemas.editing import (
     AudioMixPlan,
     CaptionCue,
     CoverPlan,
+    CourseRuleTrace,
     EditingTimeline,
     MediaAnalysis,
     ReferenceVideoBrief,
@@ -14,6 +15,7 @@ from app.schemas.editing import (
     TimelineClip,
 )
 from app.services.audio_routing_service import AudioRoutingDecision
+from app.services.course_recipe_service import CourseEditingPolicy, CourseRule
 
 
 FILLER_WORDS = {"嗯", "呃", "啊", "额", "um", "uh", "erm", "like"}
@@ -126,8 +128,13 @@ class TimelinePlanner:
                         )
                     )
             for scene in analysis.scenes:
+                safe_scene_start = scene.start_seconds
+                if scene.start_seconds <= 0.05 and scene.end_seconds - scene.start_seconds < 0.8:
+                    continue
+                if scene.start_seconds <= 0.05 and scene.end_seconds - scene.start_seconds >= 1.1:
+                    safe_scene_start = min(scene.end_seconds - 0.3, 0.8)
                 for start, end in _split_interval(
-                    scene.start_seconds,
+                    safe_scene_start,
                     scene.end_seconds,
                     maximum_seconds=maximum_clip_seconds,
                 ):
@@ -137,7 +144,13 @@ class TimelinePlanner:
                         start=start,
                         end=end,
                         score=1 + visual + scene.score + (0.75 if start < 8 else 0),
-                        reason="visual:scene_change" if scene.start_seconds > 0 else "visual:opening",
+                        reason=(
+                            "visual:scene_change"
+                            if scene.start_seconds > 0
+                            else "visual:opening_trimmed"
+                            if safe_scene_start > scene.start_seconds
+                            else "visual:opening"
+                        ),
                         has_audio=analysis.has_audio,
                     )
                     if not any(_overlap_ratio(candidate, existing) > 0.8 for existing in candidates):
@@ -154,14 +167,21 @@ class TimelinePlanner:
         bgm_path: str | None = None,
         reference_brief: ReferenceVideoBrief | None = None,
         audio_decision: AudioRoutingDecision | None = None,
+        course_policy: CourseEditingPolicy | None = None,
     ) -> EditingTimeline:
         if not analyses:
             raise ValueError("At least one media analysis is required")
-        requested = float(recipe.target_duration_seconds) if recipe is not None else target_seconds
+        requested = (
+            min(float(recipe.target_duration_seconds), target_seconds)
+            if recipe is not None
+            else target_seconds
+        )
         target = min(max(0.3, requested), self.max_automatic_seconds)
         maximum_clip_seconds = (
             reference_brief.pacing.preferred_clip_seconds if reference_brief else 3
         )
+        if course_policy is not None and course_policy.maximum_clip_seconds is not None:
+            maximum_clip_seconds = min(maximum_clip_seconds, course_policy.maximum_clip_seconds)
         candidates = self._candidates(
             analyses,
             maximum_clip_seconds=maximum_clip_seconds,
@@ -171,7 +191,15 @@ class TimelinePlanner:
 
         hook_window = reference_brief.pacing.hook_window_seconds if reference_brief else 3
         hook_pool = [item for item in candidates if item.start < hook_window] or candidates
-        hook = max(hook_pool, key=lambda item: (item.score, -item.start))
+        if course_policy is not None and course_policy.hook_keywords:
+            def course_hook_score(item: Candidate) -> tuple[int, float, float]:
+                searchable = f"{item.reason} {item.source_path}".lower()
+                matches = sum(keyword.lower() in searchable for keyword in course_policy.hook_keywords)
+                return matches, item.score, -item.start
+
+            hook = max(hook_pool, key=course_hook_score)
+        else:
+            hook = max(hook_pool, key=lambda item: (item.score, -item.start))
         selected = [hook]
         remaining = [item for item in candidates if item != hook and _overlap_ratio(item, hook) < 0.8]
         while sum(item.duration for item in selected) < target - 0.001 and remaining:
@@ -184,11 +212,21 @@ class TimelinePlanner:
 
         clips = []
         cursor = 0.0
+        hook_rule = course_policy.first("hook") if course_policy else None
+        pacing_rule = course_policy.first("pacing") if course_policy else None
+        cta_rule = course_policy.first("cta") if course_policy else None
         for index, candidate in enumerate(selected):
             available = target - cursor
             if available < 0.3:
                 break
             duration = min(candidate.duration, available)
+            applied_rule_ids: list[str] = []
+            if index == 0 and hook_rule is not None:
+                applied_rule_ids.append(hook_rule.id)
+            if pacing_rule is not None:
+                applied_rule_ids.append(pacing_rule.id)
+            if index == len(selected) - 1 and cta_rule is not None:
+                applied_rule_ids.append(cta_rule.id)
             clip = TimelineClip(
                 material_id=candidate.material_id,
                 source_path=candidate.source_path,
@@ -199,6 +237,7 @@ class TimelinePlanner:
                 score=candidate.score,
                 reason=f"hook:{candidate.reason}" if index == 0 else candidate.reason,
                 has_audio=candidate.has_audio,
+                applied_rule_ids=applied_rule_ids,
             )
             clips.append(clip)
             cursor += duration
@@ -245,12 +284,57 @@ class TimelinePlanner:
             if interval.end_seconds - interval.start_seconds >= 0.8
         )
         cover_clip = clips[0]
+        rule_trace: list[CourseRuleTrace] = []
+
+        def append_trace(rule: CourseRule | None, *, segment_id: str, decision: str, before: str, after: str) -> None:
+            if rule is None:
+                return
+            rule_trace.append(
+                CourseRuleTrace(
+                    segment_id=segment_id,
+                    rule_id=rule.id,
+                    rule_category=rule.category,
+                    tutorial_asset_id=rule.source_asset_id,
+                    tutorial_start_ms=rule.source_start_ms,
+                    tutorial_end_ms=rule.source_end_ms,
+                    evidence_text=rule.evidence_text,
+                    decision=decision,
+                    before=before,
+                    after=after,
+                )
+            )
+
+        if clips:
+            append_trace(
+                hook_rule,
+                segment_id=f"clip-1:{clips[0].material_id}",
+                decision="按教程钩子关键词选择首镜头",
+                before="按本地综合质量分选择首镜头",
+                after=f"首镜头选择 {clips[0].material_id}，{clips[0].duration_seconds:.2f} 秒",
+            )
+            append_trace(
+                pacing_rule,
+                segment_id="timeline",
+                decision="按教程限制单镜头最大时长",
+                before="本地默认单镜头最多 3.00 秒",
+                after=f"单镜头最多 {maximum_clip_seconds:.2f} 秒",
+            )
+            append_trace(
+                cta_rule,
+                segment_id=f"clip-{len(clips)}:{clips[-1].material_id}",
+                decision="把结尾片段标记为行动引导承载镜头",
+                before="按质量分完成尾镜头选择",
+                after=f"尾镜头使用 {clips[-1].material_id}",
+            )
+
         timeline = EditingTimeline(
             title=title.strip() or "video",
             target_duration_seconds=target,
             actual_duration_seconds=cursor,
             engine=(
-                "reference_guided"
+                "course_learned"
+                if course_policy is not None
+                else "reference_guided"
                 if reference_brief is not None
                 else "dify_enhanced"
                 if recipe is not None
@@ -278,6 +362,7 @@ class TimelinePlanner:
             ),
             removed_silence_seconds=removed_silence,
             source_count=len({clip.material_id for clip in clips}),
+            rule_trace=rule_trace,
         )
         validate_timeline(timeline, analyses)
         return timeline

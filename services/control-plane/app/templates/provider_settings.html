@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>可选增强配置 · VideoPilot</title>
+    <link rel="stylesheet" href="/static/design_system.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/app_nav.css?v=20260820-2">
+    <link rel="stylesheet" href="/static/provider_settings.css?v=20260831-1">
+  </head>
+  <body class="app-page">
+    {% set nav_active = 'setup' %}
+    {% include '_app_nav.html' %}
+    <main class="app-main provider-settings-shell">
+      <header class="provider-settings-head">
+        <div><span>本机安全存储</span><h1>可选增强配置</h1><p>不填写也能本地剪辑。填写的凭据只在本机加密保存，页面和 API 只显示掩码。</p></div>
+        <a href="/setup">返回配置助手</a>
+      </header>
+      <div class="restart-banner" id="provider-restart-banner" hidden>配置已保存。重启本地服务后生效。</div>
+      <section id="provider-settings-list" class="provider-settings-list" aria-live="polite">
+        <div class="provider-skeleton"></div><div class="provider-skeleton"></div>
+      </section>
+      <aside class="provider-boundary"><strong>仍需本人完成：</strong>服务开通、付费、抖音应用审批与 OAuth、钉钉组织授权。火山引擎只读用量继续在 <a href="/settings/cloud-usage">余量设置</a> 中配置。</aside>
+    </main>
+    <div class="provider-toast" id="provider-toast" role="status" aria-live="polite"></div>
+    <script src="/static/provider-settings.js?v=20260831-1" defer></script>
+  </body>
+</html>

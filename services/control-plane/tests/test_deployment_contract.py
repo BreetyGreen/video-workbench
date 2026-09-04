@@ -14,9 +14,9 @@ def test_production_compose_has_reverse_proxy_healthchecks_and_persistent_data()
     assert "basic_auth" in Path("deploy/Caddyfile").read_text(encoding="utf-8")
 
 
-def test_production_runbook_keeps_jianying_on_windows_agent():
+def test_production_runbook_keeps_jianying_on_user_devices():
     runbook = Path("docs/deployment.md").read_text(encoding="utf-8")
 
-    assert "剪映保留在 Windows 本机" in runbook
+    assert "剪映保留在 Windows/Mac 用户电脑" in runbook
     assert "docker compose" in runbook
     assert "backup-server.ps1" in runbook

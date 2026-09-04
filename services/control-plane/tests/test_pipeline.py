@@ -49,6 +49,44 @@ def test_product_narration_uses_content_type_and_fits_the_actual_timeline():
     assert "做一个25秒" not in narration
 
 
+def test_hat_product_narration_never_falls_back_to_pet_brush_copy():
+    task = SimpleNamespace(
+        title="轻量遮阳帽｜三场景真实素材商品介绍",
+        content_type="商品介绍",
+        requirements_text="突出修饰脸型、遮阳、轻便易搭",
+        tutorial_text="前三秒上身钩子",
+    )
+
+    narration = PipelineService._narration_text(task, target_seconds=24)
+
+    assert "帽" in narration
+    assert "遮阳" in narration
+    assert "除毛梳" not in narration
+    assert "宠物" not in narration
+
+
+def test_off_topic_viral_copy_is_rejected_and_hat_fallback_stays_on_topic():
+    task = SimpleNamespace(
+        title="轻量遮阳帽｜三场景真实素材商品介绍",
+        content_type="商品介绍",
+        requirements_text="突出修饰脸型、遮阳、轻便易搭",
+        tutorial_text="前三秒上身钩子",
+    )
+    viral = SimpleNamespace(
+        publish_copy=[
+            SimpleNamespace(title="十猫家庭实测", body="除毛器吸出半桶猫毛", topics=["宠物", "猫咪"]),
+            SimpleNamespace(title="两只猫和好了", body="用猫条化解冷战", topics=["萌宠"]),
+            SimpleNamespace(title="周末猫咪独白", body="给猫咪开罐头", topics=["养猫"]),
+        ]
+    )
+
+    assert PipelineService._viral_copy_matches_task(task, viral) is False
+    fallback = PipelineService._baseline_copy(task)
+    assert len(fallback) == 3
+    assert all("帽" in f"{item['title']}{item['body']}" for item in fallback)
+    assert all("宠物" not in f"{item['title']}{item['body']}" for item in fallback)
+
+
 def test_general_narration_fills_a_short_form_timeline_without_date_padding():
     task = SimpleNamespace(
         title="萌宠治愈瞬间",
@@ -101,6 +139,24 @@ def test_voiceover_is_locally_time_fitted_without_another_cloud_call(
     assert 1.85 <= fitted.duration_seconds <= 2.02
     assert speed_factor > 1
     assert fitted.character_count == generated.character_count
+
+
+def test_voiceover_is_refitted_when_course_rules_change_the_final_timeline() -> None:
+    assert PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=20.893,
+        timeline_seconds=20.64,
+        tolerance_seconds=0.25,
+    )
+    assert PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=16.0,
+        timeline_seconds=20.0,
+        tolerance_seconds=0.25,
+    )
+    assert not PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=20.89,
+        timeline_seconds=20.64,
+        tolerance_seconds=0.25,
+    )
 
 
 def test_short_voiceover_is_slowed_locally_to_cover_the_timeline(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 from sqlmodel import Session, select
@@ -11,7 +12,7 @@ from app.adapters.dify import DifyClient
 from app.adapters.jianying import edit_plan_from_timeline
 from app.adapters.volcano_tts import TTSResult, VolcanoTTSClient
 from app.config import Settings
-from app.models import DeliveryState, Material, TaskStatus, TrendRecord, VideoTask
+from app.models import DeliveryState, EditingRecipe, EditingRule, Material, TaskStatus, TrendRecord, VideoTask
 from app.schemas.analysis import EditRecipe, ViralAnalysis
 from app.schemas.editing import MediaAnalysis
 from app.services.draft_service import DraftService
@@ -23,6 +24,7 @@ from app.services.render_service import RenderService
 from app.services.task_service import get_task
 from app.services.timeline_service import TimelinePlanner
 from app.services.usage_service import UsageService
+from app.services.course_recipe_service import CourseEditingPolicy, CourseRecipeService
 
 
 class PipelineService:
@@ -53,6 +55,36 @@ class PipelineService:
         self.drafts = DraftService(settings.artifact_dir, target="6+")
         self.reference_intelligence = ReferenceIntelligenceService()
         self.quality_gates = QualityGateService(settings)
+        self.course_recipes = CourseRecipeService()
+
+    def _course_policy(
+        self,
+        session: Session,
+        task: VideoTask,
+        analysis_dir: Path,
+        evidence: list[str],
+    ) -> CourseEditingPolicy | None:
+        if not task.course_recipe_id:
+            return None
+        recipe = session.get(EditingRecipe, task.course_recipe_id)
+        if recipe is None:
+            raise ValueError("course_recipe_not_found")
+        rules = list(
+            session.exec(
+                select(EditingRule)
+                .where(EditingRule.recipe_id == recipe.id)
+                .order_by(EditingRule.sort_order, EditingRule.id)
+            ).all()
+        )
+        policy = self.course_recipes.compile(recipe, rules)
+        (analysis_dir / "course-recipe.json").write_text(
+            json.dumps(asdict(policy), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        evidence.append(
+            f"课程配方：版本 {policy.version}，{len(policy.rules)} 条带教学视频证据的规则"
+        )
+        return policy
 
     def _record_usage(
         self,
@@ -155,6 +187,25 @@ class PipelineService:
 
     @staticmethod
     def _baseline_copy(task: VideoTask) -> list[dict[str, object]]:
+        brief = f"{task.title} {task.content_type} {task.requirements_text} {task.tutorial_text}".lower()
+        if any(keyword in brief for keyword in ("帽", "hat", "头饰")):
+            return [
+                {
+                    "title": "一顶显脸小的轻量遮阳帽，三个场景看上身效果",
+                    "body": "通勤、旅行和周末出门怎么搭？这顶轻量遮阳帽用柔和帽檐修饰脸型，收纳轻松，也不压整体造型。视频展示三个真实上身场景，颜色与帽围请按自己的实际需求选择。",
+                    "topics": ["遮阳帽", "帽子穿搭", "通勤穿搭", "旅行好物"],
+                },
+                {
+                    "title": "帽子怎么选才不压造型？先看真实上身",
+                    "body": "重点不是夸张滤镜，而是帽檐弧度、脸型修饰和不同场景的搭配效果。轻量好收纳，日常遮阳、通勤和出游都能直接用。",
+                    "topics": ["显脸小帽子", "日常穿搭", "遮阳穿搭", "真实上身"],
+                },
+                {
+                    "title": "轻便、好搭、能遮阳：这顶帽子适合哪些场景？",
+                    "body": "用三个真实片段看帽子的正面、侧面和整体搭配。柔和帽檐自然修饰脸型，出门随手戴，放进行李也不占空间。实际颜色和尺寸以商品信息为准。",
+                    "topics": ["轻量帽子", "旅行穿搭", "夏日遮阳", "帽子推荐"],
+                },
+            ]
         return [
             {
                 "title": f"{task.title}｜版本{i}",
@@ -163,6 +214,38 @@ class PipelineService:
             }
             for i in range(1, 4)
         ]
+
+    @staticmethod
+    def _viral_copy_matches_task(task: VideoTask, viral: ViralAnalysis) -> bool:
+        """Reject obviously off-topic workflow output before it reaches review."""
+        brief = f"{task.title} {task.content_type} {task.requirements_text} {task.tutorial_text}".lower()
+        subject_keywords = (
+            "帽",
+            "宠物",
+            "猫",
+            "狗",
+            "除毛",
+            "服装",
+            "鞋",
+            "包",
+            "美妆",
+            "护肤",
+            "食品",
+            "饮料",
+            "家居",
+            "数码",
+            "手机",
+            "汽车",
+            "母婴",
+            "玩具",
+        )
+        expected = {keyword for keyword in subject_keywords if keyword in brief}
+        if not expected:
+            return True
+        copy_text = " ".join(
+            f"{item.title} {item.body} {' '.join(item.topics)}" for item in viral.publish_copy
+        ).lower()
+        return any(keyword in copy_text for keyword in expected)
 
     @staticmethod
     def _write_analyses(path: Path, analyses: list[MediaAnalysis]) -> None:
@@ -193,7 +276,7 @@ class PipelineService:
     def _narration_text(task: VideoTask, *, target_seconds: float = 22.0) -> str:
         title = task.title.strip() or "萌宠日常"
         category = task.content_type.strip() or "宠物"
-        brief = f"{category} {task.requirements_text} {task.tutorial_text}".lower()
+        brief = f"{title} {category} {task.requirements_text} {task.tutorial_text}".lower()
         budget = min(105, max(9, round(max(1.0, target_seconds) * 4.7)))
 
         def fit(parts: list[str]) -> str:
@@ -214,6 +297,15 @@ class PipelineService:
             return "".join(chosen) or parts[0][: budget - 1].rstrip("，。！？；、 ") + "。"
 
         if any(keyword in brief for keyword in ("商品", "产品", "带货", "卖点", "介绍")):
+            if any(keyword in brief for keyword in ("帽", "hat", "头饰")):
+                return fit(
+                    [
+                        "一顶帽子能不能显脸小，先看三个真实场景的上身效果。",
+                        "柔和帽檐自然修饰脸型，日常遮阳也不压造型。",
+                        "轻量好收纳，通勤、旅行和周末出门都容易搭配。",
+                        "选适合自己的颜色和帽围，戴上就能轻松完成整套穿搭。",
+                    ]
+                )
             return fit(
                 [
                     "沙发不再粘毛？先看这把宠物除毛梳怎么用。",
@@ -239,7 +331,7 @@ class PipelineService:
             return voiceover, 1.0
         desired_seconds = max(
             0.3,
-            target_seconds * (0.92 if voiceover.duration_seconds < lower_bound else 0.98),
+            target_seconds * (0.95 if voiceover.duration_seconds < lower_bound else 0.98),
         )
         speed_factor = voiceover.duration_seconds / desired_seconds
         factors: list[float] = []
@@ -279,6 +371,18 @@ class PipelineService:
                 character_count=voiceover.character_count,
             ),
             speed_factor,
+        )
+
+    @staticmethod
+    def _voiceover_needs_timeline_fit(
+        *,
+        voiceover_seconds: float,
+        timeline_seconds: float,
+        tolerance_seconds: float,
+    ) -> bool:
+        return (
+            voiceover_seconds - timeline_seconds > tolerance_seconds
+            or voiceover_seconds < timeline_seconds * 0.9
         )
 
     def _cached_voiceover(
@@ -383,6 +487,9 @@ class PipelineService:
                 }
             )
             (analysis_dir / "viral-analysis.json").write_text(viral.model_dump_json(indent=2), encoding="utf-8")
+            if not self._viral_copy_matches_task(task, viral):
+                warnings.append("Dify 候选文案与当前任务主题不相关，已回退到本地同主题文案。")
+                return None
             evidence.append(f"Dify 爆款分析：使用 {len(trend_payload)} 条带来源公开趋势记录")
             evidence.extend(
                 f"趋势证据：{item.metric}={item.value}（{item.source_type}）"
@@ -500,6 +607,7 @@ class PipelineService:
             except Exception as error:
                 warnings.append(f"参考片分析失败，已回退源素材智能剪辑：{type(error).__name__}")
         recipe = self._analyze_tutorial(session, task, analyses, analysis_dir, evidence, warnings)
+        course_policy = self._course_policy(session, task, analysis_dir, evidence)
         viral = self._analyze_viral(session, task, analysis_dir, evidence, warnings)
 
         task.status = TaskStatus.PLANNING
@@ -519,6 +627,7 @@ class PipelineService:
             bgm_path=audio.stored_path if audio else None,
             reference_brief=reference_brief,
             audio_decision=None,
+            course_policy=course_policy,
         )
         narration_text = self._narration_text(task, target_seconds=preliminary_timeline.actual_duration_seconds)
         voiceover = None
@@ -611,15 +720,100 @@ class PipelineService:
             encoding="utf-8",
         )
         evidence.append(f"音频路由：{audio_decision.mode}；{audio_decision.reason}")
+        final_target_seconds = target_seconds
+        if audio_decision.voiceover_path and audio_decision.voiceover_duration_seconds > 0:
+            final_target_seconds = min(target_seconds, audio_decision.voiceover_duration_seconds)
+        baseline_timeline = None
+        if course_policy is not None:
+            baseline_timeline = self.planner.plan(
+                analyses,
+                title=task.title,
+                target_seconds=final_target_seconds,
+                recipe=recipe,
+                bgm_path=audio.stored_path if audio else None,
+                reference_brief=reference_brief,
+                audio_decision=audio_decision,
+            )
         timeline = self.planner.plan(
             analyses,
             title=task.title,
-            target_seconds=target_seconds,
+            target_seconds=final_target_seconds,
             recipe=recipe,
             bgm_path=audio.stored_path if audio else None,
             reference_brief=reference_brief,
             audio_decision=audio_decision,
+            course_policy=course_policy,
         )
+        if (
+            voiceover is not None
+            and audio_decision.voiceover_path
+            and self._voiceover_needs_timeline_fit(
+                voiceover_seconds=audio_decision.voiceover_duration_seconds,
+                timeline_seconds=timeline.actual_duration_seconds,
+                tolerance_seconds=self.settings.quality_duration_tolerance_seconds,
+            )
+        ):
+            voiceover, final_fit_factor = self._fit_voiceover(
+                voiceover,
+                target_seconds=timeline.actual_duration_seconds,
+            )
+            voiceover_speed_factor *= final_fit_factor
+            audio_decision = self.audio_router.decide(
+                analyses,
+                narration_text=narration_text,
+                voiceover=voiceover,
+                content_type=task.content_type,
+            )
+            timeline.audio = timeline.audio.model_copy(
+                update={
+                    "mode": audio_decision.mode,
+                    "original_gain_db": audio_decision.original_gain_db,
+                    "voiceover_path": audio_decision.voiceover_path,
+                    "voiceover_gain_db": audio_decision.voiceover_gain_db,
+                    "voice_type": audio_decision.voice_type,
+                    "voiceover_duration_seconds": audio_decision.voiceover_duration_seconds,
+                    "decision_reason": audio_decision.reason,
+                }
+            )
+            timeline.captions = list(audio_decision.captions)
+            audio_route.update(
+                {
+                    "mode": audio_decision.mode,
+                    "reason": audio_decision.reason,
+                    "original_gain_db": audio_decision.original_gain_db,
+                    "voiceover_path": audio_decision.voiceover_path,
+                    "voiceover_gain_db": audio_decision.voiceover_gain_db,
+                    "voice_type": audio_decision.voice_type,
+                    "voiceover_duration_seconds": audio_decision.voiceover_duration_seconds,
+                    "voiceover_speed_factor": round(voiceover_speed_factor, 4),
+                    "warning": audio_decision.warning,
+                }
+            )
+            (analysis_dir / "audio-routing.json").write_text(
+                json.dumps(audio_route, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if course_policy is not None and baseline_timeline is not None:
+            comparison = self.course_recipes.compare(baseline_timeline, timeline, course_policy)
+            (task_artifacts / "baseline-timeline.json").write_text(
+                baseline_timeline.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+            (task_artifacts / "course-rule-trace.json").write_text(
+                json.dumps(
+                    [item.model_dump(mode="json") for item in timeline.rule_trace],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (task_artifacts / "course-comparison.json").write_text(
+                json.dumps(comparison, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            evidence.append(
+                "课程规则已改变时间线：" + "、".join(comparison["meaningful_changes"])
+            )
         (task_artifacts / "edit-timeline.json").write_text(timeline.model_dump_json(indent=2), encoding="utf-8")
         evidence.append(
             f"智能时间线：{len(timeline.clips)} 段剪辑，{timeline.source_count} 个素材源，"

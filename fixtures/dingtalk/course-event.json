@@ -1,0 +1,39 @@
+{
+  "title": "宠物商品短视频剪辑课",
+  "source_type": "dingtalk_fixture",
+  "source_user": "fixture-teacher",
+  "source_conversation": "course-intake-group",
+  "source_message_id": "fixture-course-2026-09-01-v1",
+  "assets": [
+    {
+      "path": "media/tutorial.txt",
+      "mime_type": "text/plain",
+      "role": "tutorial",
+      "rights_status": "personal_learning"
+    },
+    {
+      "path": "media/reference.mp4",
+      "mime_type": "video/mp4",
+      "role": "reference",
+      "rights_status": "personal_learning"
+    },
+    {
+      "path": "media/material-red.mp4",
+      "mime_type": "video/mp4",
+      "role": "material",
+      "rights_status": "commercial_authorized"
+    },
+    {
+      "path": "media/material-green.mp4",
+      "mime_type": "video/mp4",
+      "role": "material",
+      "rights_status": "commercial_authorized"
+    },
+    {
+      "path": "media/material-blue.mp4",
+      "mime_type": "video/mp4",
+      "role": "material",
+      "rights_status": "commercial_authorized"
+    }
+  ]
+}
