@@ -31,6 +31,14 @@ class CourseAssetRole(StrEnum):
     MATERIAL = "material"
 
 
+class TutorialSegmentType(StrEnum):
+    LECTURE = "lecture"
+    SOFTWARE_OPERATION = "software_operation"
+    FINISHED_EXAMPLE = "finished_example"
+    INTRO_OUTRO = "intro_outro"
+    UNKNOWN = "unknown"
+
+
 class RightsStatus(StrEnum):
     UNKNOWN = "unknown"
     PERSONAL_LEARNING = "personal_learning"
@@ -97,6 +105,28 @@ class EditingRule(SQLModel, table=True):
     source_start_ms: int | None = None
     source_end_ms: int | None = None
     source_page: int | None = None
+    sort_order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class TutorialSegment(SQLModel, table=True):
+    __tablename__ = "tutorial_segments"
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "source_asset_id", "start_ms", "end_ms", name="uq_tutorial_segment_range"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    recipe_id: str = Field(foreign_key="editing_recipes.id", index=True)
+    source_asset_id: str = Field(foreign_key="course_assets.id", index=True)
+    segment_type: TutorialSegmentType = Field(default=TutorialSegmentType.UNKNOWN, index=True)
+    start_ms: int | None = None
+    end_ms: int | None = None
+    source_page: int | None = None
+    transcript_text: str = ""
+    ocr_text_json: str = "[]"
+    visual_cues_json: str = "[]"
+    related_rule_ids_json: str = "[]"
+    confidence: float = 0.0
     sort_order: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

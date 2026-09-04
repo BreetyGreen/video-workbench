@@ -141,6 +141,24 @@ def test_voiceover_is_locally_time_fitted_without_another_cloud_call(
     assert fitted.character_count == generated.character_count
 
 
+def test_voiceover_is_refitted_when_course_rules_change_the_final_timeline() -> None:
+    assert PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=20.893,
+        timeline_seconds=20.64,
+        tolerance_seconds=0.25,
+    )
+    assert PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=16.0,
+        timeline_seconds=20.0,
+        tolerance_seconds=0.25,
+    )
+    assert not PipelineService._voiceover_needs_timeline_fit(
+        voiceover_seconds=20.89,
+        timeline_seconds=20.64,
+        tolerance_seconds=0.25,
+    )
+
+
 def test_short_voiceover_is_slowed_locally_to_cover_the_timeline(
     tmp_path: Path,
     ffmpeg_bin: str,

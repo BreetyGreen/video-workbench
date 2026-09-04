@@ -5,6 +5,7 @@
 .superpowers/
 .worktrees/
 .tmp/
+.validation/
 data/
 fixtures/dingtalk/media/*.mp4
 docs/verification/

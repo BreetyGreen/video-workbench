@@ -29,7 +29,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun
+from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun, TutorialSegment
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -60,6 +60,8 @@ from app.schemas.course_knowledge import (
     EditingRecipeRead,
     EditingRuleRead,
     ShotSearchResultRead,
+    TutorialSegmentArtifactRead,
+    TutorialSegmentRead,
 )
 from app.schemas.materials import MaterialAcquisitionRequest
 from app.schemas.provider_settings import ProviderSettingsUpdate
@@ -105,6 +107,16 @@ from app.services.device_delivery_service import DeviceDeliveryService
 from app.services.tutorial_demo_assets import TutorialDemoAssetService
 from app.services.tutorial_demo_service import TutorialDemoService
 logger = logging.getLogger(__name__)
+
+
+def _bounded_string_list(raw: str | None, *, maximum_items: int = 200) -> list[str]:
+    try:
+        payload = json.loads(raw or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list) or len(payload) > maximum_items:
+        return []
+    return [item for item in payload if isinstance(item, str) and len(item) <= 2_000]
 
 
 def create_app(
@@ -206,8 +218,10 @@ def create_app(
         app_settings.data_dir,
         app_settings.course_max_file_bytes,
     )
+    pipeline_analyzer = getattr(pipeline_service, "analyzer", None)
     tutorial_understanding = TutorialUnderstandingService(
-        getattr(getattr(pipeline_service, "analyzer", None), "transcriber", None)
+        getattr(pipeline_analyzer, "transcriber", None),
+        media_analyzer=pipeline_analyzer,
     )
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
     course_material_search = CourseMaterialSearchService()
@@ -989,6 +1003,13 @@ def create_app(
                 .order_by(EditingRule.sort_order, EditingRule.id)
             ).all()
         )
+        segments = list(
+            session.exec(
+                select(TutorialSegment)
+                .where(TutorialSegment.recipe_id == recipe.id)
+                .order_by(TutorialSegment.sort_order, TutorialSegment.id)
+            ).all()
+        )
         material_assets = list(
             session.exec(
                 select(CourseAsset)
@@ -1004,6 +1025,23 @@ def create_app(
         return EditingRecipeRead(
             **recipe.model_dump(),
             rules=[EditingRuleRead.model_validate(rule) for rule in rules],
+            segments=[
+                TutorialSegmentRead(
+                    id=segment.id,
+                    source_asset_id=segment.source_asset_id,
+                    segment_type=segment.segment_type.value,
+                    start_ms=segment.start_ms,
+                    end_ms=segment.end_ms,
+                    source_page=segment.source_page,
+                    transcript_text=segment.transcript_text,
+                    ocr_texts=_bounded_string_list(segment.ocr_text_json),
+                    visual_cues=_bounded_string_list(segment.visual_cues_json),
+                    related_rule_ids=_bounded_string_list(segment.related_rule_ids_json),
+                    confidence=segment.confidence,
+                    sort_order=segment.sort_order,
+                )
+                for segment in segments
+            ],
             shot_count=shot_count,
         )
 
@@ -1435,6 +1473,19 @@ def create_app(
             {"kind": "warning", "status": "warn", "title": "生成警告", "message": str(item), "seek_seconds": None}
             for item in warnings
         )
+        tutorial_segments_path = bundle.task_dir / "tutorial-segments.json"
+        tutorial_segments: list[dict[str, object]] = []
+        tutorial_segments_invalid = False
+        if tutorial_segments_path.is_file():
+            try:
+                if tutorial_segments_path.stat().st_size > 2 * 1024 * 1024:
+                    raise ValueError("tutorial segment artifact is too large")
+                segment_payload = json.loads(tutorial_segments_path.read_text(encoding="utf-8"))
+                validated_artifact = TutorialSegmentArtifactRead.model_validate(segment_payload)
+                tutorial_segments = [item.model_dump() for item in validated_artifact.segments]
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+                tutorial_segments_invalid = True
+                tutorial_segments = []
         return templates.TemplateResponse(
             request,
             "review.html",
@@ -1459,6 +1510,15 @@ def create_app(
                 "subtitle_coverage": narration_coverage if audio_route.get("voiceover_used") else None,
                 "review_issues": review_issues,
                 "jianying_handoff": jianying_handoff.status(task_id),
+                "tutorial_segments": tutorial_segments,
+                "tutorial_segments_invalid": tutorial_segments_invalid,
+                "tutorial_segment_labels": {
+                    "lecture": "老师讲解",
+                    "software_operation": "软件操作",
+                    "finished_example": "成片示例",
+                    "intro_outro": "片头片尾",
+                    "unknown": "待识别",
+                },
             },
         )
 

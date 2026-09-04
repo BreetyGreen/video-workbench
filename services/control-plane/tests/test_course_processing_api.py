@@ -52,6 +52,10 @@ def test_process_course_returns_cited_recipe(tmp_path: Path, ffmpeg_fixture: Pat
     assert all(rule["source_page"] for rule in result["rules"])
     assert all(rule["evidence_text"] for rule in result["rules"])
     assert all(0 <= rule["confidence"] <= 1 for rule in result["rules"])
+    assert [segment["segment_type"] for segment in result["segments"]] == ["lecture", "lecture"]
+    assert all(segment["transcript_text"] for segment in result["segments"])
+    assert all(segment["related_rule_ids"] for segment in result["segments"])
+    assert all(isinstance(segment["ocr_texts"], list) for segment in result["segments"])
     assert result["tutorial_asset_id"]
     assert len(result["transcript_sha256"]) == 64
     assert result["shot_count"] >= 1

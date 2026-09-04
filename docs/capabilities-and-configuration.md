@@ -119,7 +119,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 
 ```text
 带语音的教学视频（独立画面）
-  → ASR 分段与时间码证据
+  → ASR + 场景 + 关键帧 OCR
+  → 老师讲解 / 软件操作 / 成片示例 / 片头片尾分段
   → 钩子、节奏、字幕、特写、对比、CTA 等规则
   → 与教学视频不同且许可明确的素材
   → 基线时间线 + 应用规则后的时间线
@@ -128,7 +129,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
   → 剪映草稿和打开请求
 ```
 
-证据文件包括 `tutorial-transcript.json`、`editing-recipe.json`、`baseline-timeline.json`、`course-rule-trace.json`、`course-comparison.json` 和 `source-ledger.json`。每条规则保存原文片段、开始/结束时间和置信度；最终时间线的镜头保存实际命中的规则 ID。若规则没有造成足够的可观察变化，任务以 `course_rules_not_applied` 失败，不会把“成功转写”冒充为“已经学会剪辑”。
+证据文件包括 `tutorial-transcript.json`、`tutorial-visual-analysis.json`、`tutorial-segments.json`、`editing-recipe.json`、`baseline-timeline.json`、`course-rule-trace.json`、`course-comparison.json` 和 `source-ledger.json`。`tutorial-segments.json` 保存每段的类型、时间码、转写、OCR、视觉提示、置信度和关联规则；只有“老师讲解”会直接生成规则，软件操作和成片示例只作为证据与关联参考，避免把示例广告口播误当成教学要求。每条规则保存原文片段、开始/结束时间和置信度；最终时间线的镜头保存实际命中的规则 ID。若规则没有造成足够的可观察变化，任务以 `course_rules_not_applied` 失败，不会把“成功转写”冒充为“已经学会剪辑”。
+
+当前分段是可复现的本地多模态规则分类：它联合时间码、ASR 文本、场景、关键帧 OCR 和视觉提示，但还不是通用视觉大模型。遇到画中画、老师边操作边讲解、示例与讲解快速交替等复杂课程时，低置信度片段会保留为“待识别”，审核页可直接查看并下载证据；项目不会把低置信度判断伪装成确定结论。
 
 零 Key 时使用本地 Whisper，首次运行要下载模型；当前机器若已经配置并允许 BigASR，演示会优先使用云转写并把提供方和模型写入证据。公开演示素材来自许可明确的来源并锁定 SHA-256；真实商用课程仍只会选取明确标记为 `commercial_authorized` 的素材。
 
@@ -211,7 +214,7 @@ Dify 不是剪辑器。它只给本地剪辑引擎提供结构化建议：
 
 ### course-automation：课程理解与自动成片
 
-课程文件可以来自钉钉，也可以直接调用课程入库接口。服务器会保存教程、案例和素材的角色与 SHA-256，教程规则保留来源页码或时间码，视频素材做镜头切分和检索。创建商用作业时只复制明确标记为 `commercial_authorized` 的视频；只有个人学习权利或未知权利的素材不会进入商用成片。
+课程文件可以来自钉钉，也可以直接调用课程入库接口。服务器会保存教程、案例和素材的角色与 SHA-256；教学视频会额外保存讲解、软件操作、成片示例和片头片尾的分段账本，教程规则保留来源页码或时间码，视频素材做镜头切分和检索。创建商用作业时只复制明确标记为 `commercial_authorized` 的视频；只有个人学习权利或未知权利的素材不会进入商用成片。
 
 ```text
 课程入库 → 教程规则抽取 → 素材镜头索引 → POST /api/course-edit-jobs

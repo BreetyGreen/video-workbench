@@ -31,6 +31,8 @@ DOWNLOADABLE_ARTIFACTS = {
     "tutorial-provenance.json",
     "tutorial-learning.mp4",
     "tutorial-transcript.json",
+    "tutorial-visual-analysis.json",
+    "tutorial-segments.json",
     "learned-course-recipe.json",
 }
 

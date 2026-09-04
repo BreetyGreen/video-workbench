@@ -80,6 +80,12 @@
 .timeline-row:hover { background: var(--color-surface-subtle); }
 .timeline-row > span:last-child { display: grid; gap: 0.15rem; }
 .timeline-row small { color: var(--color-ink-muted); }
+.tutorial-segment-row { cursor: default; padding-left: 0.75rem; }
+.tutorial-segment-row:hover { background: transparent; }
+.tutorial-segment-row small { overflow-wrap: anywhere; }
+.tutorial-segment-row.segment-lecture { border-left: 3px solid var(--color-accent); }
+.tutorial-segment-row.segment-software_operation { border-left: 3px solid var(--color-success); }
+.tutorial-segment-row.segment-finished_example { border-left: 3px solid var(--color-warning); }
 .timecode { color: var(--color-accent-strong); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.75rem; }
 
 .copy-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }

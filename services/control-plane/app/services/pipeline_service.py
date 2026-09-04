@@ -373,6 +373,18 @@ class PipelineService:
             speed_factor,
         )
 
+    @staticmethod
+    def _voiceover_needs_timeline_fit(
+        *,
+        voiceover_seconds: float,
+        timeline_seconds: float,
+        tolerance_seconds: float,
+    ) -> bool:
+        return (
+            voiceover_seconds - timeline_seconds > tolerance_seconds
+            or voiceover_seconds < timeline_seconds * 0.9
+        )
+
     def _cached_voiceover(
         self,
         analysis_dir: Path,
@@ -732,6 +744,55 @@ class PipelineService:
             audio_decision=audio_decision,
             course_policy=course_policy,
         )
+        if (
+            voiceover is not None
+            and audio_decision.voiceover_path
+            and self._voiceover_needs_timeline_fit(
+                voiceover_seconds=audio_decision.voiceover_duration_seconds,
+                timeline_seconds=timeline.actual_duration_seconds,
+                tolerance_seconds=self.settings.quality_duration_tolerance_seconds,
+            )
+        ):
+            voiceover, final_fit_factor = self._fit_voiceover(
+                voiceover,
+                target_seconds=timeline.actual_duration_seconds,
+            )
+            voiceover_speed_factor *= final_fit_factor
+            audio_decision = self.audio_router.decide(
+                analyses,
+                narration_text=narration_text,
+                voiceover=voiceover,
+                content_type=task.content_type,
+            )
+            timeline.audio = timeline.audio.model_copy(
+                update={
+                    "mode": audio_decision.mode,
+                    "original_gain_db": audio_decision.original_gain_db,
+                    "voiceover_path": audio_decision.voiceover_path,
+                    "voiceover_gain_db": audio_decision.voiceover_gain_db,
+                    "voice_type": audio_decision.voice_type,
+                    "voiceover_duration_seconds": audio_decision.voiceover_duration_seconds,
+                    "decision_reason": audio_decision.reason,
+                }
+            )
+            timeline.captions = list(audio_decision.captions)
+            audio_route.update(
+                {
+                    "mode": audio_decision.mode,
+                    "reason": audio_decision.reason,
+                    "original_gain_db": audio_decision.original_gain_db,
+                    "voiceover_path": audio_decision.voiceover_path,
+                    "voiceover_gain_db": audio_decision.voiceover_gain_db,
+                    "voice_type": audio_decision.voice_type,
+                    "voiceover_duration_seconds": audio_decision.voiceover_duration_seconds,
+                    "voiceover_speed_factor": round(voiceover_speed_factor, 4),
+                    "warning": audio_decision.warning,
+                }
+            )
+            (analysis_dir / "audio-routing.json").write_text(
+                json.dumps(audio_route, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         if course_policy is not None and baseline_timeline is not None:
             comparison = self.course_recipes.compare(baseline_timeline, timeline, course_policy)
             (task_artifacts / "baseline-timeline.json").write_text(
