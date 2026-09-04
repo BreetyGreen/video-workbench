@@ -9,10 +9,12 @@
 - 修复 Windows 剪映发现后完整控制面回归重新执行，`262 passed`；所有前端 JavaScript 入口语法检查、Python 编译、Git 差异检查和秘密模式扫描通过。
 - 已提交快照通过 `scripts/verify-fresh-clone.py --dry-run`：只使用 Git 跟踪文件解包，仓库布局、doctor、首次引导、配置页、本地模式保存和服务健康检查均通过，且没有修改真实用户目录。
 - Windows 原生诊断补齐非系统盘剪映发现：受限扫描 `B:\Apps\JianyingPro` 及用户本地安装目录，不遍历整盘；本机可识别 `B:\Apps\JianyingPro\11.3.0.14362\JianyingPro.exe`。
+- 发布候选提交 `a202448` 已推送到 `codex/video-workbench-closure` 并创建 GitHub PR #4；该远端检出版本的两组 macOS `native-contract` 与两组 Windows `windows-contract` 均通过。
+- 本地验证服务已在 `127.0.0.1:8166` 恢复；健康检查、任务 `f851d75a-817a-45b6-ba31-502bbad1b143` 审核页、预览和教学分段证据均返回 HTTP 200。
 
 ## 风险与待确认
 
-- 发布到 GitHub 后仍需等待 Windows/macOS GitHub Actions 的真实远端检出结果；本地通过不替代 macOS 实机剪映草稿导入与客户端打开。
+- GitHub Windows/macOS Runner 已验证远端检出、依赖安装、平台契约和 fresh-clone 烟测；这仍不替代 macOS 实机剪映草稿导入与客户端打开。
 - 尚未收到用户真实付费课程文件，因此当前教程理解闭环由可复现的混合教学演示验证，不能替代真实课程样本验收。
 - 生产服务器、域名、HTTPS、钉钉组织授权、抖音开放平台权限以及 Apple/Windows 签名身份均属于外部资源；仓库可以提供检测、构建和部署入口，但不能伪造这些身份或授权。
 
