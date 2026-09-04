@@ -6,16 +6,18 @@
 
 ### Confirmed
 
-- 修复 Windows 剪映发现后完整控制面回归重新执行，`262 passed`；所有前端 JavaScript 入口语法检查、Python 编译、Git 差异检查和秘密模式扫描通过。
+- 补齐 Windows 剪映发现与生产部署模板后完整控制面回归重新执行，`263 passed`；所有前端 JavaScript 入口语法检查、Python 编译、Git 差异检查和秘密模式扫描通过。
 - 已提交快照通过 `scripts/verify-fresh-clone.py --dry-run`：只使用 Git 跟踪文件解包，仓库布局、doctor、首次引导、配置页、本地模式保存和服务健康检查均通过，且没有修改真实用户目录。
 - Windows 原生诊断补齐非系统盘剪映发现：受限扫描 `B:\Apps\JianyingPro` 及用户本地安装目录，不遍历整盘；本机可识别 `B:\Apps\JianyingPro\11.3.0.14362\JianyingPro.exe`。
-- 发布候选提交 `a202448` 已推送到 `codex/video-workbench-closure` 并创建 GitHub PR #4；该远端检出版本的两组 macOS `native-contract` 与两组 Windows `windows-contract` 均通过。
+- GitHub PR #4 已在两组 macOS `native-contract` 与两组 Windows `windows-contract` 全部通过后合入 `main`，合并提交为 `3b5e7db`；普通 clone 默认分支现已包含本轮教程理解与剪辑闭环。
 - 本地验证服务已在 `127.0.0.1:8166` 恢复；健康检查、任务 `f851d75a-817a-45b6-ba31-502bbad1b143` 审核页、预览和教学分段证据均返回 HTTP 200。
+- 主分支 GitHub Actions 运行 `33834324363` 已分别生成 Windows 与 macOS 同步助手；Windows EXE `--help` 烟测返回 0，两个平台制品 SHA-256 均与清单一致。仓库未配置签名 Secret，因此这些制品保持未签名且未公开为正式 Release。
+- 修复生产部署模板缺失：新增无真实凭据的 `deploy/.env.production.example`，部署契约测试与生产 Compose 插值检查均通过。
 
 ## 风险与待确认
 
 - GitHub Windows/macOS Runner 已验证远端检出、依赖安装、平台契约和 fresh-clone 烟测；这仍不替代 macOS 实机剪映草稿导入与客户端打开。
-- 尚未收到用户真实付费课程文件，因此当前教程理解闭环由可复现的混合教学演示验证，不能替代真实课程样本验收。
+- 当前课程库 4 条记录的 `source_type` 均为 `tutorial_demo`，尚未收到用户真实付费课程文件；当前教程理解闭环不能替代真实课程样本验收。
 - 生产服务器、域名、HTTPS、钉钉组织授权、抖音开放平台权限以及 Apple/Windows 签名身份均属于外部资源；仓库可以提供检测、构建和部署入口，但不能伪造这些身份或授权。
 
 ## 2026-09-02 教学视频多模态分段与真实闭环

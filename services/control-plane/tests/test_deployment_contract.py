@@ -20,3 +20,16 @@ def test_production_runbook_keeps_jianying_on_user_devices():
     assert "剪映保留在 Windows/Mac 用户电脑" in runbook
     assert "docker compose" in runbook
     assert "backup-server.ps1" in runbook
+
+
+def test_production_environment_template_exists_without_real_credentials():
+    template_path = Path("deploy/.env.production.example")
+
+    assert template_path.is_file()
+    template = template_path.read_text(encoding="utf-8")
+    assert "AUTH_USERNAME=replace-with-admin-user" in template
+    assert "VIDEO_WORKBENCH_BASIC_AUTH_HASH=replace-with-caddy-hash" in template
+    assert "VIDEO_WORKBENCH_DOMAIN=video.example.com" in template
+    assert "VIDEO_WORKBENCH_USAGE_SECRET_MASTER_KEY=replace-with-random-secret" in template
+    assert "AKLT" not in template
+    assert "gho_" not in template
