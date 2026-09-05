@@ -31,6 +31,7 @@ jobs:
             services/control-plane/tests/test_native_script_contract.py \
             services/control-plane/tests/test_repo_bootstrap_contract.py -q
           "$HOME/.local/bin/uv" run --project services/control-plane pytest \
+            services/control-plane/tests/test_database_bootstrap.py \
             services/control-plane/tests/test_course_schedules.py \
             services/control-plane/tests/test_course_edit_job_service.py \
             services/control-plane/tests/test_sync_helper_packaging.py -q

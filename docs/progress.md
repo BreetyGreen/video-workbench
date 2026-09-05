@@ -14,13 +14,15 @@
 - 新任务通过独立设备同步目录真实下载、校验并导入 `B:\JianyingData\Drafts\JianyingPro Drafts\课程计划真实渲染验收-81bee291-56e2f114`，助手退出 0、imported、media_validated=true。真实验证发现 Windows getpass 不读取管道 stdin，新增显式 `--pairing-code-stdin` 修复自动化配对；默认手工模式保持无回显。
 - Mac 新增原生对话框 `.app` 设置程序，HTTPS地址/一次性配对、只配对不领任务、LaunchAgent、私有备份、替换失败回滚、旧 Agent 恢复、构建 ZIP 和校验和；文案不再伪称“已有签名发布包”。
 - 最终控制面全套回归 `289 passed in 231.31s`；独立复查无 Critical/Important 问题。成功升级目前保留私有旧版本备份（可能含旧设备凭据），自动清理尚未实现。
+- GitHub 助手构建 `33979407461` 的 Windows 和 macOS 两项均通过，产物分别约 8.9MB / 40.2MB；仍是未签名开发包，未发布稳定 Release。
+- 首轮新增 Mac 课程契约检查暴露默认 SQLite 父目录不存在的问题；已增加数据库初始化目录保障及独立回归，不能用有历史数据的本机测试掩盖首次启动失败。
 
 ### Evidence boundary / Open
 
 - 本轮真实媒体运行复用了已学习的演示课程配方，没有重新执行视频 ASR，也没有新增云调用；证明的是新计划→真实渲染→Windows设备同步链路。没有将合成演示课改称真实付费教程。
 - 真正钉钉组织网盘、真实长课程、公开服务器 HTTPS、Mac Finder/LaunchAgent/剪映 GUI，以及 Apple 签名公证仍须在对应资源上单独验收。
 - 课程计划复用固定素材，不保证每天不同成片；同一计划每天最多一次，暂停不取消已排队任务；服务停机不追补历史日期。仍为单工作区、单 API 进程的 SQLite 队列，不能多副本运行。
-- 最终全套回归、fresh-clone 和 GitHub 构建结果待本节下方补充；在推送之前不能称默认分支已包含本轮功能。
+- PR #6 已创建。首轮本地 fresh-clone 等待服务超时（90秒），相同提交的 Windows GitHub fresh-clone 通过；Mac 原生契约修复及默认分支合并仍待最终确认。
 
 ## 2026-09-04 发布收口
 
