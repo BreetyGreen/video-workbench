@@ -133,6 +133,14 @@ python scripts/verify-fresh-clone.py --dry-run
 
 ## 课程自动剪辑与设备同步
 
+- 用户入口 `/courses`：导入教程视频/TXT与配套视频，选定素材、需求、日程、目标电脑和云处理同意；无需 Codex 常驻执行。
+- `POST /api/course-schedules` 保存课程计划；`POST /api/course-schedules/{id}/run` 持久排队并立即返回；`GET /api/course-schedules/{id}/runs` 查询真实阶段、job_id/task_id；`PATCH .../{id}` 仅切换 enabled。
+- 计划默认暂停、非商用、不同意云处理；worker 在 `AUTOMATION_SCHEDULER_ENABLED=true` 时随单实例服务启动，不依赖旧关键词日程开关 `AUTOMATION_ENABLED`。旧关键词自动化与课程计划是独立业务，不可混为已连通。
+- 一个计划按其时区每天最多一条（手动与定时共用防重）；错过时间只补当前日期、不追补历史。暂停不取消已排队工作。选定素材固定，不保证每日自动换素材；修改配置请新建计划并暂停旧计划。
+- 排队时冻结课程/素材/需求/设备配置，执行时再次校验素材权利与设备可用性；缺配方会先学习教程，空规则阻止普通剪辑替代。普通课程作业也输出 `learned-course-recipe.json` 与 `tutorial-segments.json`。
+- 选定 device_id 的作业在创建时即绑定，只进入该设备队列。未选目标时保留本地导入/未分配设备认领兼容路径；服务器部署必须指导用户先配对并选择目标。
+- 服务重启把仍 running 且无终态作业的记录标为 interrupted，不自动重复渲染。检查关联作业与已产生文件后由管理员决定重试，不删除中断证据。
+- 只支持一个 API 进程、一个工作区、SQLite 持久队列；不要用多个 Uvicorn worker 或多个副本运行恢复逻辑。外部服务授权、真正钉钉网盘与 Mac GUI 验收须独立标注，不能由 mock/CI 替代。
 - `POST /api/courses/intake` 接收教程、案例和素材；`POST /api/courses/{id}/process` 生成带来源引用的规则并切分素材镜头。
 - `POST /api/course-edit-jobs` 使用最新规则和已授权课程视频执行真实剪辑。商用任务只接受 `commercial_authorized` 素材。
 - `POST /api/tutorial-learning-demo` 启动可重复的完整验收，`GET /api/tutorial-learning-demo/{run_id}` 读取阶段、错误、任务与证据链接。不要同步阻塞 HTTP 请求等待渲染；轮询到 `completed` 或 `failed`。

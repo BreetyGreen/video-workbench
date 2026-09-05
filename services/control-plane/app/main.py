@@ -103,6 +103,8 @@ from app.services.tutorial_understanding_service import TutorialUnderstandingSer
 from app.services.course_material_analysis_service import CourseMaterialAnalysisService
 from app.services.course_material_search_service import CourseMaterialSearchService
 from app.services.course_edit_job_service import CourseEditJobService
+from app.services.course_schedule_service import CourseScheduleService
+from app.course_routes import course_router
 from app.services.device_delivery_service import DeviceDeliveryService
 from app.services.tutorial_demo_assets import TutorialDemoAssetService
 from app.services.tutorial_demo_service import TutorialDemoService
@@ -226,6 +228,7 @@ def create_app(
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
     course_material_search = CourseMaterialSearchService()
     course_edit_jobs = CourseEditJobService(app_settings, pipeline_service, jianying_handoff)
+    course_schedules = CourseScheduleService(database, tutorial_understanding, course_edit_jobs)
     device_delivery = DeviceDeliveryService(usage_key)
     tutorial_demo = tutorial_demo_service_override or TutorialDemoService(
         app_settings,
@@ -273,9 +276,12 @@ def create_app(
         if app_settings.automation_enabled and app_settings.automation_scheduler_enabled:
             automation_scheduler.start()
             app.state.automation_scheduler_started = True
+        if app_settings.automation_scheduler_enabled:
+            course_schedules.start()
         try:
             yield
         finally:
+            await course_schedules.stop()
             if app.state.automation_scheduler_started:
                 await automation_scheduler.stop()
 
@@ -285,10 +291,14 @@ def create_app(
     app.state.cloud_usage = cloud_usage
     app.state.provider_settings = provider_settings
     app.state.automation_scheduler_started = False
+    app.state.course_schedules = course_schedules
     app.mount("/static", StaticFiles(directory=str(app_dir / "static")), name="static")
 
     def session_dependency():
         yield from database.session()
+
+    app.include_router(course_router(course_schedules, session_dependency, templates,
+                                     worker_enabled=app_settings.automation_scheduler_enabled))
 
     def local_runtime_snapshot() -> dict:
         system = host_platform.system()

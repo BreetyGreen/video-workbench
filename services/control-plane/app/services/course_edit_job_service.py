@@ -14,6 +14,7 @@ from app.models import (
     CourseAsset,
     CourseAssetRole,
     CourseEditJob,
+    DeliveryDevice,
     EditingRecipe,
     EditingRule,
     RightsStatus,
@@ -65,10 +66,18 @@ class CourseEditJobService:
         commercial: bool = True,
         quality_profile: str = "production",
         cloud_processing_allowed: bool = False,
+        material_ids: list[str] | None = None,
+        device_id: str | None = None,
+        requirements_text: str = "",
+        job_id: str | None = None,
     ) -> CourseEditJobResult:
         course = session.get(Course, course_id)
         if course is None:
             raise ValueError("course_not_found")
+        if device_id is not None:
+            device = session.get(DeliveryDevice, device_id)
+            if device is None or not device.active:
+                raise ValueError("device_unavailable")
         recipe = session.exec(
             select(EditingRecipe)
             .where(EditingRecipe.course_id == course_id)
@@ -91,6 +100,11 @@ class CourseEditJobService:
             else {RightsStatus.PERSONAL_LEARNING, RightsStatus.COMMERCIAL_AUTHORIZED}
         )
         assets = [item for item in assets if item.rights_status in allowed_rights]
+        if material_ids is not None:
+            available = {item.id: item for item in assets}
+            if not material_ids or any(item not in available for item in material_ids):
+                raise ValueError("selected_material_unavailable_or_unlicensed")
+            assets = [available[item] for item in dict.fromkeys(material_ids)]
         if not assets:
             raise ValueError("commercial_material_not_authorized" if commercial else "personal_material_not_authorized")
 
@@ -101,6 +115,8 @@ class CourseEditJobService:
                 .order_by(EditingRule.sort_order, EditingRule.id)
             ).all()
         )
+        if not rules:
+            raise ValueError("course_recipe_has_no_rules")
         tutorial_text = "\n".join(
             f"[{rule.category}] {rule.instruction}（来源素材 {rule.source_asset_id}"
             + (f"，第 {rule.source_page} 页" if rule.source_page else "")
@@ -109,7 +125,9 @@ class CourseEditJobService:
             for rule in rules
         )
         job = CourseEditJob(
+            **({"id": job_id} if job_id else {}),
             course_id=course_id,
+            device_id=device_id,
             recipe_id=recipe.id,
             state="creating_task",
             commercial=commercial,
@@ -125,7 +143,7 @@ class CourseEditJobService:
                 title=title,
                 content_type=content_type,
                 assets=assets,
-                requirements_text=f"按课程《{course.title}》的最新剪辑配方自动成片。",
+                requirements_text=f"按课程《{course.title}》的最新剪辑配方自动成片。\n{requirements_text}",
                 tutorial_text=tutorial_text,
                 commercial=commercial,
                 quality_profile=quality_profile,
@@ -138,6 +156,7 @@ class CourseEditJobService:
             session.add(job)
             session.commit()
 
+            self._write_course_evidence(session, task.id, recipe, rules)
             self.pipeline.process(session, task)
             quality = self._read_quality(task.id)
             quality_status = quality.get("status")
@@ -160,7 +179,9 @@ class CourseEditJobService:
             session.commit()
             job.review_skipped = True
 
-            handoff = self.handoff.import_task(task.id)
+            # Server jobs for a selected computer must never import on the server
+            # or enter the unassigned device queue.
+            handoff = {"status": "waiting"} if device_id else self.handoff.import_task(task.id)
             job.handoff_status = str(handoff.get("status") or "unknown")
             if job.handoff_status == "imported":
                 job.state = "delivered_to_jianying"
@@ -191,3 +212,7 @@ class CourseEditJobService:
         if not isinstance(payload, dict):
             raise ValueError("quality_report_missing_or_invalid")
         return payload
+
+    def _write_course_evidence(self, session, task_id, recipe, rules):
+        from app.services.course_evidence_service import write_course_evidence
+        write_course_evidence(session, self.settings, task_id, recipe, rules)
