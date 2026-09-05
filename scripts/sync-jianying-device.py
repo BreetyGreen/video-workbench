@@ -90,7 +90,7 @@ def prepare_runtime(data_dir: Path) -> None:
     process_requests(data_dir, manifest)  # type: ignore[operator]
 
 
-def load_or_pair_token(server_url: str, data_dir: Path, device_name: str) -> str:
+def load_or_pair_token(server_url: str, data_dir: Path, device_name: str, pairing_code_stdin: bool = False) -> str:
     environment_token = os.environ.get("VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN", "").strip()
     if environment_token:
         return environment_token
@@ -98,7 +98,10 @@ def load_or_pair_token(server_url: str, data_dir: Path, device_name: str) -> str
     stored = read_stored_device_token(token_path)
     if stored:
         return stored
-    code = getpass.getpass("首次使用请输入服务器生成的一次性配对码：").strip()
+    if pairing_code_stdin:
+        code = sys.stdin.readline().strip()
+    else:
+        code = getpass.getpass("首次使用请输入服务器生成的一次性配对码：").strip()
     if not code:
         raise ValueError("pairing_code_required")
     paired = UrlLibSyncHttp(server_url).post_json(
@@ -117,11 +120,15 @@ def main() -> int:
     parser.add_argument("--server-url", required=True)
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--watch", action="store_true")
+    parser.add_argument("--pair-only", action="store_true", help="Pair and store the device credential without claiming jobs")
+    parser.add_argument("--pairing-code-stdin", action="store_true", help="Read the one-time pairing code from standard input")
     parser.add_argument("--interval", type=int, default=15)
     parser.add_argument("--device-name", default=os.environ.get("COMPUTERNAME") or os.environ.get("HOSTNAME") or "VideoWorkbench Device")
     args = parser.parse_args()
     data_dir = args.data_dir.expanduser().resolve()
-    token = load_or_pair_token(args.server_url, data_dir, args.device_name)
+    token = load_or_pair_token(args.server_url, data_dir, args.device_name, args.pairing_code_stdin)
+    if args.pair_only:
+        return 0
     http = UrlLibSyncHttp(args.server_url, token)
     consecutive_failures = 0
     while True:

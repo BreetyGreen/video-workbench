@@ -178,6 +178,33 @@ class CourseEditJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class CourseSchedule(SQLModel, table=True):
+    __tablename__ = "course_schedules"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    course_id: str = Field(foreign_key="courses.id", index=True)
+    title: str
+    configuration_json: str
+    enabled: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CourseScheduleRun(SQLModel, table=True):
+    __tablename__ = "course_schedule_runs"
+    __table_args__ = (UniqueConstraint("schedule_id", "local_date", name="uq_course_schedule_day"),)
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    schedule_id: str = Field(foreign_key="course_schedules.id", index=True)
+    local_date: str
+    configuration_json: str
+    state: str = Field(default="queued", index=True)
+    # Reserve a stable job ID before work begins so crash recovery can find it.
+    job_id: str = Field(default_factory=lambda: str(uuid4()))
+    error_code: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    finished_at: datetime | None = None
+
+
 class TutorialDemoRun(SQLModel, table=True):
     __tablename__ = "tutorial_demo_runs"
 

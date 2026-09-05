@@ -10,6 +10,7 @@
       {% if nav_active == 'review' %}<span class="app-nav-current" aria-current="page"><span aria-hidden="true">◉</span><span>任务审核</span></span>{% endif %}
       <a href="/trends"{% if nav_active == 'trends' %} aria-current="page"{% endif %}><span aria-hidden="true">↗</span><span>热点雷达</span></a>
       <a href="/materials"{% if nav_active == 'materials' %} aria-current="page"{% endif %}><span aria-hidden="true">▦</span><span>授权素材</span></a>
+      <a href="/courses"{% if nav_active == 'courses' %} aria-current="page"{% endif %}><span aria-hidden="true">▶</span><span>课程自动剪辑</span></a>
       <a href="/voices"{% if nav_active == 'voices' %} aria-current="page"{% endif %}><span aria-hidden="true">♫</span><span>音色中心</span></a>
     </div>
     <div class="app-nav-group">
@@ -31,6 +32,7 @@
     <a href="/"{% if nav_active == 'workbench' %} aria-current="page"{% endif %}>创作</a>
     <a href="/trends"{% if nav_active == 'trends' %} aria-current="page"{% endif %}>热点</a>
     <a href="/materials"{% if nav_active == 'materials' %} aria-current="page"{% endif %}>素材</a>
+    <a href="/courses"{% if nav_active == 'courses' %} aria-current="page"{% endif %}>课程</a>
     <a href="/voices"{% if nav_active == 'voices' %} aria-current="page"{% endif %}>音色</a>
     <a href="/setup"{% if nav_active == 'setup' %} aria-current="page"{% endif %}>配置</a>
     <a href="/settings/cloud-usage"{% if nav_active == 'cloud_usage' %} aria-current="page"{% endif %}>用量</a>

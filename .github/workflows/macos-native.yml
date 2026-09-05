@@ -30,5 +30,10 @@ jobs:
             services/control-plane/tests/test_doctor_cli.py \
             services/control-plane/tests/test_native_script_contract.py \
             services/control-plane/tests/test_repo_bootstrap_contract.py -q
+          "$HOME/.local/bin/uv" run --project services/control-plane pytest \
+            services/control-plane/tests/test_database_bootstrap.py \
+            services/control-plane/tests/test_course_schedules.py \
+            services/control-plane/tests/test_course_edit_job_service.py \
+            services/control-plane/tests/test_sync_helper_packaging.py -q
           bash -n scripts/bootstrap.sh scripts/start-local.sh scripts/stop-local.sh
           python3 scripts/verify-fresh-clone.py --dry-run

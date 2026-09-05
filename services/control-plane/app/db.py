@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 from sqlalchemy import text
 from sqlmodel import Session, SQLModel, create_engine
@@ -10,6 +11,14 @@ class Database:
         self.engine = create_engine(url, connect_args=connect_args)
 
     def create_all(self) -> None:
+        database = self.engine.url.database
+        if (
+            self.engine.url.get_backend_name() == "sqlite"
+            and database
+            and database != ":memory:"
+            and not self.engine.url.query.get("uri")
+        ):
+            Path(database).parent.mkdir(parents=True, exist_ok=True)
         SQLModel.metadata.create_all(self.engine)
         if self.engine.url.get_backend_name() == "sqlite":
             self._migrate_sqlite()

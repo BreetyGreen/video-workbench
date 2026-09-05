@@ -33,7 +33,9 @@ def test_setup_page_contains_local_first_flow(client: TestClient):
     assert 'id="setup-capability-list"' in page.text
     assert 'id="create-device-pairing-code"' in page.text
     assert 'id="device-pairing-result"' in page.text
-    assert "查看已签名 Mac / Windows 发布包" in page.text
+    assert "查看同步助手发布状态" in page.text
+    assert "CI 构建不代表已签名" in page.text
+    assert 'href="/courses"' in page.text
     assert 'id="confirm-local-mode"' in page.text
     assert 'id="run-tutorial-demo"' in page.text
     assert 'id="tutorial-demo-result"' in page.text

@@ -21,6 +21,7 @@ fixtures/media/*.mp4
 outputs/
 work/
 sync-helper/build/
+sync-helper/macos-build-stage/
 sync-helper/dist/
 sync-helper/*.spec
 /build/

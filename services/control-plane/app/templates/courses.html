@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>课程自动剪辑 · VIDEOPILOT</title>
+  <link rel="stylesheet" href="/static/design_system.css?v=20260820-3">
+  <link rel="stylesheet" href="/static/app_nav.css?v=20260820-3">
+  <link rel="stylesheet" href="/static/materials.css?v=20260820-3">
+  <style>
+    .course-page .acquire-panel{display:block;background:var(--color-surface);color:var(--color-ink);border:1px solid var(--color-border);margin:24px 0}
+    .course-page .acquire-panel h2{font-size:1.4rem;margin:0 0 24px;letter-spacing:normal}
+    .course-page .acquire-panel form{grid-template-columns:minmax(0,1fr);margin-top:20px}
+    .course-page .acquire-panel summary{cursor:pointer}.course-page .acquire-panel summary span{display:block;color:var(--color-ink-muted);margin-top:8px}
+    .course-page .acquire-panel p{color:var(--color-ink-muted)}.course-page .acquire-panel a{color:var(--color-accent-strong)}
+    .course-page .course-form button{justify-self:start;min-width:140px}
+    .course-form{display:grid;gap:16px;min-width:0}.course-form label{display:grid;gap:8px}
+    .course-form select,.course-form textarea,.course-form input:not([type=checkbox]){width:100%;max-width:100%;box-sizing:border-box;padding:10px;border:1px solid #ddddea;border-radius:8px;background:#fff;color:#20202a;font:inherit}
+    .course-form .check{display:flex;align-items:center;gap:8px}.course-form input[type=checkbox]{width:auto}
+    .course-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}.course-plan{border-top:1px solid #ddddea;padding:20px 0;overflow-wrap:anywhere}
+    .course-actions{display:flex;gap:12px;flex-wrap:wrap}.course-status{white-space:pre-wrap;overflow-wrap:anywhere}
+    #course-materials{display:grid;gap:10px}.course-form fieldset{border:1px solid #ddddea;border-radius:8px;padding:16px;min-width:0}
+    @media(max-width:700px){.course-columns{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="app-page">
+{% set nav_active = 'courses' %}{% include '_app_nav.html' %}
+<main class="app-main material-page course-page">
+  <header class="material-hero"><div><p class="eyebrow">课程 / 自动生产</p><h1>课程自动剪辑</h1><p>先学习教程的剪辑规则，再用你选中的视频素材成片。讲解、操作、示例分段属于辅助分析，复杂课程仍需核对学习结果。</p></div><a class="hero-action" href="/">返回创作</a></header>
+  <p id="course-message" class="course-status" role="status">正在读取课程与接收设备…</p>
+  <details class="acquire-panel"><summary><strong>1. 导入教程和配套素材</strong><span>已有课程可跳过；钉钉接入后的文件也出现在下方课程列表</span></summary>
+    <form id="course-upload" class="course-form">
+      <label>课程名称<input name="title" required maxlength="200" placeholder="例如：商品短视频剪辑课"></label>
+      <label>教学文件（视频或 TXT 讲义）<input name="tutorial" type="file" accept="video/*,.txt" multiple required></label>
+      <label>用于剪辑的配套视频<input name="materials" type="file" accept="video/*" multiple required></label>
+      <label>素材使用权<select name="rights"><option value="personal_learning">仅限个人学习，不用于商业发布</option><option value="commercial_authorized">已取得商业使用授权</option></select></label>
+      <label class="check"><input name="confirmed" type="checkbox" required>我确认有权上传和处理以上文件；购买课程不等于取得素材商用权。</label>
+      <button type="submit">导入课程</button>
+    </form>
+  </details>
+  <section class="acquire-panel"><h2>2. 选择课程，安排剪辑</h2>
+    <form id="course-plan-form" class="course-form">
+      <label>课程<select id="course-select" required></select></label>
+      <p id="course-recipe"></p>
+      <fieldset><legend>本计划使用的视频素材</legend><div id="course-materials"></div></fieldset>
+      <label>计划名称<input name="title" required maxlength="200" placeholder="例如：每天一条帽子视频"></label>
+      <label>剪辑要求（可选）<textarea name="requirements_text" rows="3" maxlength="5000" placeholder="例如：20 秒，保留原声，先展示效果"></textarea></label>
+      <div class="course-columns"><label>内容类型<select name="content_type"><option>教程讲解</option><option>商品介绍</option><option>混剪</option></select></label>
+      <label>草稿接收电脑<select id="course-device"><option value="">当前服务所在电脑（本地使用）</option></select></label></div>
+      <p>服务器部署时请先在<a href="/setup">配置助手</a>配对电脑，再选择目标设备。电脑需开机、联网并运行同步助手；没有接收设备时不会自动写入你的 Mac。</p>
+      <label class="check"><input name="commercial" type="checkbox">用于商业视频（只允许已授权商用素材）</label>
+      <label class="check"><input name="cloud_processing_allowed" type="checkbox">允许将本任务音频、文字等发送到已配置云服务，可能产生费用</label>
+      <label class="check"><input name="enabled" type="checkbox">每天自动生成一条；不勾选则只保存计划，由我点“立即生成”</label>
+      <div class="course-columns"><label>每日时间<input name="daily_time" type="time" value="09:00" required></label><label>时区<select name="timezone"><option value="Asia/Shanghai">中国时间</option><option value="Asia/Tokyo">日本时间</option><option value="UTC">UTC</option></select></label></div>
+      <p>同一计划每天最多一条，重复点击不会重复生成。素材选择固定，不承诺每天成片不同；暂停不取消已经排队的任务。服务器停机期间不补跑历史日期。</p>
+      <button type="submit">保存剪辑计划</button>
+    </form>
+  </section>
+  <section class="acquire-panel"><div class="course-actions"><h2>3. 执行记录与成片</h2><button id="course-refresh" type="button">刷新</button></div><div id="course-plans"></div></section>
+</main><script src="/static/course_schedules.js?v=20260906-1" defer></script>
+</body></html>
