@@ -33,4 +33,5 @@
 
 - [x] Update human guide, Codex guide, capability catalog and progress with current boundaries.
 - [x] Review diff independently and fix substantive findings.
-- [ ] Run appropriate regression, publish through existing authorized GitHub PR workflow, verify CI and default-branch state.
+- [x] Run appropriate regression, publish through existing authorized GitHub PR workflow and verify CI. PR #6; 289 full-suite tests plus 26 targeted post-bootstrap-fix tests; both native platforms and their fresh-clone checks passed on 1e86d86.
+- Default-branch inclusion is tracked by PR #6's merge state; no production deployment or signed release is implied by merge.
