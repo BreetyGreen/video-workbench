@@ -2,6 +2,8 @@
 
 本文件供 Codex 或其他代码代理读取。普通用户的完整说明见 `docs/capabilities-and-configuration.md`；机器可读能力清单见 `services/control-plane/app/capability_catalog.json`。
 
+Mac 用户逐步操作入口：`docs/macos-user-guide.md`。2026-09-07 文档核查发现 `provider_settings.html` 引用 `provider-settings.js/css`，实际文件名为 `provider_settings.js/css`；修复并验证前不得把增强配置页称为已可用，本次仅记录，没有修改应用代码。
+
 ## 不可违反的事实
 
 1. 本地上传、分析、剪辑、字幕、预览、质检和剪映草稿不需要任何云端 Key。
@@ -94,7 +96,7 @@ powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 
 ## macOS 与 Windows 的配置差异
 
-- macOS 原生脚本不读取仓库 `.env`。可选配置只能由用户在启动进程的环境中设置；Codex提供变量名和命令骨架，但用户本人粘贴值。
+- macOS 原生脚本不主动读取仓库根 `.env`。可选配置支持启动进程环境和 ProviderSettingsService 的加密持久化；图形配置页当前资源引用问题见上文。不得为了绕过页面问题索取用户秘密。
 - Windows 当前使用 Docker Compose，读取被 Git 忽略的仓库根 `.env`。
 - 本地基线在两个平台都不需要这些可选配置。
 

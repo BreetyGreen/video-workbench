@@ -1,5 +1,7 @@
 # 剪辑能力与配置完整指南
 
+Mac 用户逐步操作见 [Mac 详细操作手册](macos-user-guide.md)，包含当前增强配置页资源路径已知问题与服务器同步前置条件。
+
 ## 先说结论：本地剪辑不需要 Key
 
 别人 clone 仓库后，不填写 `.env`，也不申请火山引擎、Dify、抖音、钉钉、Pexels、Pixabay 或 Seedance，就可以完成这条本地主链：
@@ -309,7 +311,7 @@ Windows 安装脚本默认写入当前用户的 `%LOCALAPPDATA%`。它不会自�
 
 ## macOS 怎样提供可选凭据
 
-macOS 的本地启动脚本为了避免仓库意外读取秘密，**不会主动读取仓库根目录 `.env`**。需要可选云能力时，由用户在启动该进程的终端中设置对应 `VIDEO_WORKBENCH_*` 环境变量，再运行 `bash scripts/bootstrap.sh`。不要把值发给 Codex；可以让 Codex只给出变量名，由用户在自己的终端粘贴。
+macOS 本地启动脚本**不会主动读取仓库根目录 `.env`**。配置服务支持加密存储与重启加载，图形入口为 `/settings/providers`；但 `6e0f0c6` 中该页静态资源引用存在连字符/下划线不一致，尚需修复并验证，详见 [Mac 手册](macos-user-guide.md)。也可由维护者指导在启动进程环境中设置 `VIDEO_WORKBENCH_*` 变量。不要把真实值发给 Codex或写进命令历史。
 
 Windows/Docker 路径会读取仓库根目录下被 Git 忽略的 `.env`。修改后重新运行启动脚本。
 

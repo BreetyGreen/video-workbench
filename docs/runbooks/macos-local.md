@@ -1,8 +1,10 @@
 # macOS 本地运行手册
 
+普通用户请先阅读 [Mac 用户详细操作手册](../macos-user-guide.md)，其中包含本地/服务器路线、页面逐字段操作、云服务已知问题、剪映验收和备份。本页保留维护者快速定位命令。
+
 ## 最短路径
 
-在仓库的 `全自动视频发布` 目录执行：
+在克隆后的 `video-workbench` 仓库根目录执行：
 
 ```bash
 python3 scripts/doctor.py
@@ -20,8 +22,8 @@ bash scripts/stop-local.sh
 ## 自动创建的位置
 
 - 数据库、日志、任务和 PID：`~/Library/Application Support/VideoWorkbench`
-- 模型缓存：`~/Library/Caches/VideoWorkbench`
-- 自动监听素材入口：`~/Movies/VideoWorkbench Inbox`
+- 模型：当前本地 Whisper 实际写入 `~/Library/Application Support/VideoWorkbench/models`；平台另定义缓存目录 `~/Library/Caches/VideoWorkbench`。
+- 素材收件箱：`~/Movies/VideoWorkbench Inbox`；不能把目录存在当作文件已自动绑定课程的证据，首轮课程验证使用网页上传。
 
 这些目录都在 Git 仓库之外。删除或重新克隆仓库不会删除用户素材和任务。
 
