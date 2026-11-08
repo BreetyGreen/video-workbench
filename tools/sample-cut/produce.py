@@ -2,6 +2,7 @@
 
 usage (inside the project work dir, after takes/selected-takes.json, copy.json and spec.json exist):
   python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--draft]
+                   [--narration voice/x/narration]   (reuse an approved voice instead of synthesizing)
 steps: copy_check -> voice (whole script) -> narration timing -> render -> BGM versions -> QA -> cover ->
        phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits
 settings: <data_home>/sample-cut.json (voice engine, cloud voice, own-voice prompt, delivery dir) - see AUTOPILOT.md
@@ -28,6 +29,7 @@ ap.add_argument("--cloud-voice", default=CFG.get("cloud_voice", "longxiaochun_v2
 ap.add_argument("--bgm-versions", type=int, default=CFG.get("bgm_versions", 3))
 ap.add_argument("--draft", action="store_true", default=CFG.get("jianying_draft", False))
 ap.add_argument("--name", default="final")
+ap.add_argument("--narration", help="reuse an existing narration dir (narration.json + narration.wav)")
 a = ap.parse_args()
 env = {**os.environ, "SAMPLE_CUT_WORK": str(WORK), "PYTHONIOENCODING": "utf-8"}
 log = []
@@ -56,44 +58,51 @@ except SystemExit:
     have_key = False
 cv_home = Path(os.environ.get("COSYVOICE_HOME") or CFG.get("cosyvoice_home") or data_home() / "CosyVoice").expanduser()
 cv_py = cv_home / (".venv/Scripts/python.exe" if IS_WIN else ".venv/bin/python")
-engine = a.voice
-if engine == "auto":
-    engine = "local" if CFG.get("own_voice_prompt") and cv_py.exists() else ("cloud" if have_key else "local")
 text = "".join(s["text"] for s in copy["sentences"])
-if engine == "cloud":
-    if not have_key:
-        raise SystemExit("云端配音需要 VIDEO_WORKBENCH_DASHSCOPE_API_KEY；或装 CosyVoice 走本机配音")
-    vdir = WORK / "voice" / a.cloud_voice
-    vdir.mkdir(parents=True, exist_ok=True)
-    whole = vdir / "whole.mp3"
-    if not whole.exists():
-        import dashscope
-        from dashscope.audio.tts_v2 import SpeechSynthesizer
-        dashscope.api_key = dashscope_key()
-        audio = SpeechSynthesizer(model="cosyvoice-v2", voice=a.cloud_voice).call(text)  # whole script: natural prosody
-        if not audio:
-            raise SystemExit("云端配音没有返回音频")
-        whole.write_bytes(audio)
-    voice_label = f"云端 CosyVoice（{a.cloud_voice}）"
+if a.narration:  # reuse an approved voice: skip synthesis and timing
+    narr_dir = Path(a.narration).resolve()
+    if not (narr_dir / "narration.json").is_file():
+        raise SystemExit(f"--narration 目录里没有 narration.json：{narr_dir}")
+    _n = json.loads((narr_dir / "narration.json").read_text(encoding="utf-8"))
+    voice_label = f"沿用已有配音（{_n.get('engine', '?')} / {_n.get('voice', '?')}）"
 else:
-    if not cv_py.exists():
-        raise SystemExit(f"本机配音没有安装（{cv_home}）。先运行 tools/cosyvoice/install.sh，或设置百炼 Key 走云端配音")
-    prompt = CFG.get("own_voice_prompt") or str(cv_home / "asset" / "zero_shot_prompt.wav")
-    prompt_text = CFG.get("own_voice_text") or "希望你以后能够做的比我还好呦。"
-    vdir = WORK / "voice" / ("own" if CFG.get("own_voice_prompt") else "cosyvoice-demo")
-    whole = vdir / "whole.wav"
-    if not whole.exists():
-        r = subprocess.run([str(cv_py), str(REPO / "tools" / "cosyvoice" / "clone_tts.py"), "--prompt", prompt,
-                            "--prompt-text", prompt_text, "--text-file", str(WORK / "copy.json"), "--out", str(whole)],
-                           env={**env, "COSYVOICE_HOME": str(cv_home)}, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
-        if r.returncode:
-            print(r.stderr[-2000:])
-            raise SystemExit("本机配音失败")
-    voice_label = "本机 CosyVoice（" + ("自己的声音" if CFG.get("own_voice_prompt") else "官方示例音色，仅演示") + "）"
-narr_dir = vdir / "narration"
-env["VOICE_ENGINE"] = engine
-step("narration_from_whole.py", whole, narr_dir)
+    engine = a.voice
+    if engine == "auto":
+        engine = "local" if CFG.get("own_voice_prompt") and cv_py.exists() else ("cloud" if have_key else "local")
+    if engine == "cloud":
+        if not have_key:
+            raise SystemExit("云端配音需要 VIDEO_WORKBENCH_DASHSCOPE_API_KEY；或装 CosyVoice 走本机配音")
+        vdir = WORK / "voice" / a.cloud_voice
+        vdir.mkdir(parents=True, exist_ok=True)
+        whole = vdir / "whole.mp3"
+        if not whole.exists():
+            import dashscope
+            from dashscope.audio.tts_v2 import SpeechSynthesizer
+            dashscope.api_key = dashscope_key()
+            audio = SpeechSynthesizer(model="cosyvoice-v2", voice=a.cloud_voice).call(text)  # whole script: natural prosody
+            if not audio:
+                raise SystemExit("云端配音没有返回音频")
+            whole.write_bytes(audio)
+        voice_label = f"云端 CosyVoice（{a.cloud_voice}）"
+    else:
+        if not cv_py.exists():
+            raise SystemExit(f"本机配音没有安装（{cv_home}）。先运行 tools/cosyvoice/install.sh，或设置百炼 Key 走云端配音")
+        prompt = CFG.get("own_voice_prompt") or str(cv_home / "asset" / "zero_shot_prompt.wav")
+        prompt_text = CFG.get("own_voice_text") or "希望你以后能够做的比我还好呦。"
+        vdir = WORK / "voice" / ("own" if CFG.get("own_voice_prompt") else "cosyvoice-demo")
+        whole = vdir / "whole.wav"
+        if not whole.exists():
+            r = subprocess.run([str(cv_py), str(REPO / "tools" / "cosyvoice" / "clone_tts.py"), "--prompt", prompt,
+                                "--prompt-text", prompt_text, "--text-file", str(WORK / "copy.json"), "--out", str(whole)],
+                               env={**env, "COSYVOICE_HOME": str(cv_home)}, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            if r.returncode:
+                print(r.stderr[-2000:])
+                raise SystemExit("本机配音失败")
+        voice_label = "本机 CosyVoice（" + ("自己的声音" if CFG.get("own_voice_prompt") else "官方示例音色，仅演示") + "）"
+    narr_dir = vdir / "narration"
+    env["VOICE_ENGINE"] = engine
+    step("narration_from_whole.py", whole, narr_dir)
 narr = json.loads((narr_dir / "narration.json").read_text(encoding="utf-8"))
 
 # ---------- render ----------

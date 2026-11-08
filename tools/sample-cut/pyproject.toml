@@ -5,6 +5,7 @@ description = "Sample-standard product video cut: takes, voice, render, BGM, Jia
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "dashscope==1.27.5",
+  "jieba==0.42.1",
   "numpy==2.4.6",
   "pillow==12.3.0",
   "pyJianYingDraft==0.3.0",
