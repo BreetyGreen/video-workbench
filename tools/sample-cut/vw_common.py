@@ -37,6 +37,31 @@ def run(args, tail: int = 1500) -> subprocess.CompletedProcess:
     return r
 
 
+_FILTERS: set[str] | None = None
+
+
+def has_filter(name: str) -> bool:
+    """Homebrew's default `ffmpeg` formula ships without libass (no `ass`/`subtitles` filters); ffmpeg-full has them."""
+    global _FILTERS
+    if _FILTERS is None:
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace").stdout
+        _FILTERS = {ln.split()[1] for ln in out.splitlines() if len(ln.split()) > 2 and ln.startswith(" ")}
+    return name in _FILTERS
+
+
+def ffmpeg_reason(text: str) -> str:
+    """The line that explains an ffmpeg failure; its last line is usually just 'Invalid argument'."""
+    keys = ("No such filter", "Unknown encoder", "Unrecognized option", "not found", "No such file", "Invalid data",
+            "Error initializing", "Error opening")
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    for k in keys:
+        for ln in lines:
+            if k in ln:
+                return ln[:200]
+    return (lines[-1] if lines else "unknown error")[:200]
+
+
 def probe_dur(p) -> float:
     return float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p]).stdout)
 
@@ -90,7 +115,7 @@ def encode_checked(build, out, bitrate: str = "256k", max_tp: float = -1.0) -> d
         try:
             run(build(["-c:a", enc[0], *enc[1:], "-b:a", bitrate]))
         except RuntimeError as e:
-            tried.append(f"{enc[0]}: failed ({str(e).splitlines()[-1][:80]})")
+            tried.append(f"{enc[0]}: failed ({ffmpeg_reason(str(e))})")
             continue
         tp = true_peak(out)
         tried.append(f"{enc[0]}: {tp} dBTP")

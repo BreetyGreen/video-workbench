@@ -107,7 +107,7 @@ def band_bytes(src):
 a, b = band_bytes(final), band_bytes(work / "renders" / "smoke" / "picture.mp4")
 diff = sum(abs(x - y) for x, y in zip(a, b)) / max(1, len(a))
 checks["subtitle_drawn"] = diff > 3.0
-print(json.dumps({"encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
+print(json.dumps({"subtitles": res["subtitles"], "encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
                   "subtitle_band_diff": round(diff, 2), "frame": str(frame), "checks": checks}, ensure_ascii=False, indent=1))
 if not all(checks.values()):
     raise SystemExit("smoke test FAILED: " + ", ".join(k for k, v in checks.items() if not v))

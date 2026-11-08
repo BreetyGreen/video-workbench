@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-from vw_common import encode_checked, fonts_dir, run, subtitle_font, work_dir
+from vw_common import encode_checked, fonts_dir, has_filter, pil_font, run, subtitle_font, work_dir
 
 WORK = work_dir()
 NARR = Path(sys.argv[1]).resolve()
@@ -219,16 +219,48 @@ else:
 # loudnorm alone overshoots after AAC (measured -0.3..-0.7 dBTP); a 4x-oversampled limiter at -2 dBFS keeps TP < -1.5
 fc += (f"[m]loudnorm=I={mix['target_lufs']}:TP=-1.5:LRA=11,aresample=192000,"
        f"alimiter=limit=0.79:level=false:attack=1:release=50,aresample=48000,atrim=0:{end_all:.3f}[a]")
+
+
 def esc(p: str) -> str:  # ffmpeg filter-arg escaping for paths (drive colon, quotes)
     return p.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
 
 
-fdir = fonts_dir()
-ass_f = f"ass='{esc((OUT / 'captions.ass').as_posix())}'" + (f":fontsdir='{esc(fdir)}'" if fdir else "")
+def cue_png(text: str, path: Path) -> int:
+    """Draw one cue like the ASS style (bold white, black outline, top-aligned at margin_v); returns its y offset."""
+    from PIL import Image, ImageDraw
+    pad = int(st["outline"]) + 4
+    font = pil_font(max(12, round(st["size"] * 0.8)), bold=bool(st["bold"]))
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    x0, y0, x1, y1 = probe.textbbox((0, 0), text, font=font, stroke_width=int(st["outline"]))
+    img = Image.new("RGBA", (W, (y1 - y0) + 2 * pad), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text(((W - (x1 - x0)) // 2 - x0, pad - y0), text, font=font, fill=(255, 255, 255, 255),
+                             stroke_width=int(st["outline"]), stroke_fill=(0, 0, 0, 255))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+    return max(0, int(st["margin_v"]) - pad)
+
+
+n_in = inputs.count("-i")
+if has_filter("ass") and not os.environ.get("SAMPLE_CUT_PNG_SUBS"):
+    sub_mode = "libass"
+    fdir = fonts_dir()
+    vchain = (f"[0:v]ass='{esc((OUT / 'captions.ass').as_posix())}'" + (f":fontsdir='{esc(fdir)}'" if fdir else "")
+              + "[vo]")
+else:  # ffmpeg built without libass (Homebrew's default formula): Pillow-drawn cues overlaid in their time windows
+    sub_mode = "pillow-overlay"
+    parts, last = [], "0:v"
+    for k, (s, e, c) in enumerate(cues):
+        png = OUT / "subs" / f"cue{k:02d}.png"
+        y = cue_png(c, png)
+        inputs += ["-i", str(png)]
+        lab = "vo" if k == len(cues) - 1 else f"o{k}"
+        parts.append(f"[{last}][{n_in + k}:v]overlay=0:{y}:enable='between(t,{s:.3f},{e:.3f})'[{lab}]")
+        last = lab
+    vchain = ";".join(parts) if parts else "[0:v]null[vo]"
 final = OUT / f"{NAME}.mp4"
-enc = encode_checked(lambda a: ["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", fc + f";[0:v]{ass_f}[vo]",
+enc = encode_checked(lambda a: ["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", fc + ";" + vchain,
                                 "-map", "[vo]", "-map", "[a]", "-c:v", "libx264", "-preset", "slow", "-crf", "18",
                                 "-profile:v", "high", "-pix_fmt", "yuv420p", *a, "-ar", "48000",
                                 "-movflags", "+faststart", "-t", f"{end_all:.3f}", str(final)], final, bitrate="192k")
 print(json.dumps({"final": str(final), "duration": round(end_all, 3), "shots": len(plan),
-                  "avg_shot_s": round(end_all / len(plan), 2), "cues": len(cues), **enc}, ensure_ascii=False))
+                  "avg_shot_s": round(end_all / len(plan), 2), "cues": len(cues), "subtitles": sub_mode, **enc}, ensure_ascii=False))

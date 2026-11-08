@@ -183,6 +183,7 @@ GitHub 的 macOS CI 每次都会跑这个测试。
 |---|---|---|
 | AAC 编码 | `aac_mf`，自带 `aac` 兜底 | `aac_at`，自带 `aac` 兜底 |
 | 字幕字体 | Microsoft YaHei，从 `C:\Windows\Fonts` 读取 | 自动换成 PingFang SC，由 libass 通过 CoreText 查找 |
+| 字幕烧录 | libass（`ass` 滤镜） | Homebrew 默认的 `ffmpeg` 没有 libass，会自动改用 Pillow 画字幕再叠加，输出里显示 `"subtitles": "pillow-overlay"`。装 `ffmpeg-full` 就会用 libass |
 | 剪映草稿目录 | `%LOCALAPPDATA%\JianyingPro\User Data\Projects\com.lveditor.draft` | `~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft` |
 | 数据目录（BGM、CosyVoice） | `<仓库>/data/` | `~/Library/Application Support/VideoWorkbench/` |
 | CosyVoice | CPU，约 13 倍实时（2.6 秒音频算 35 秒） | Apple Silicon CPU，速度未实测 |

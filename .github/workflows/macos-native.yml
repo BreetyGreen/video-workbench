@@ -40,6 +40,7 @@ jobs:
       - name: Sample-cut smoke test (synthetic media, aac_at, PingFang subtitles)
         run: |
           command -v ffmpeg >/dev/null || brew install ffmpeg
+          ffmpeg -hide_banner -filters | grep -E " (ass|subtitles) " || echo "ffmpeg has no libass: render.py uses the Pillow subtitle fallback"
           "$HOME/.local/bin/uv" sync --project tools/sample-cut --python 3.12 --locked
           bash -n tools/cosyvoice/install.sh
           "$HOME/.local/bin/uv" run --project tools/sample-cut python tools/sample-cut/smoke_test.py "$RUNNER_TEMP/sample-cut-smoke"
