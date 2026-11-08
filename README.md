@@ -33,6 +33,9 @@ bash scripts/bootstrap.sh
 
 开始前建议先看：
 
+- [全新 Mac + Codex 接手本项目（从零安装到做出第一条视频）](docs/mac-codex-handoff.md)
+- [样片标准剪辑脚本：选镜头、配音、出片、BGM、剪映草稿](tools/sample-cut/README.md)
+- [Mac 用户详细操作手册：安装、课程剪辑、剪映交付、每日运行与排障](docs/macos-user-guide.md)
 - [普通用户：剪辑能力与配置完整指南](docs/capabilities-and-configuration.md)
 - [Codex：启动、诊断与配置决策指南](docs/codex-operator-guide.md)
 - [只有账号本人能完成的授权清单](docs/user-required-actions.md)
@@ -50,9 +53,9 @@ macOS 详细说明与故障定位见 [macOS 本地运行手册](docs/runbooks/ma
 
 Codex 只用于安装和维护，不参与日常运行。课程入库后，服务器通过 `POST /api/course-edit-jobs` 自动按最新教程规则选择已授权素材、生成多素材成片并执行质量门禁；通过后直接进入设备交付队列，不强制人工审核。Mac/Windows 电脑运行轻量同步助手即可把服务器草稿新建到本机剪映并启动客户端。普通用户不需要 clone 仓库、安装 Python 或让 Codex 常驻；维护者给仓库打 `sync-helper-v*` 标签后，GitHub Actions 会分别构建 Windows 与 macOS 产物并挂到 Release：
 
-- 已签名发布包入口：<https://github.com/BreetyGreen/video-workbench/releases/latest>。CI 先创建草稿 Release，签名与验收完成后才由维护者公开。
+- 发布状态入口：<https://github.com/BreetyGreen/video-workbench/releases>。没有正式条目就表示没有公开安装版；CI 构建或草稿 Release 不代表已签名、公证或完成 Mac 实机验收。
 - Windows：`VideoWorkbenchSync.exe` + `install-windows.ps1`，默认安装到当前用户的本地应用目录；只有维护者明确传入 `-InstallDir`/`-DataDir` 时才使用 B 盘或其他位置，并注册登录自启。
-- macOS：`VideoWorkbenchSync` + `install-macos.sh` + LaunchAgent，安装到用户目录并登录自启。
+- macOS：新增 `VideoWorkbench-Sync-Setup-macOS.zip`，解压后运行 `VideoWorkbench Sync Setup.app` 输入 HTTPS 地址和一次性配对码；仍需匹配架构、签名和实机验收。原命令行安装方式保留给维护者。
 
 仓库内 Python 命令只保留给开发者调试：
 

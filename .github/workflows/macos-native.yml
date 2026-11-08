@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   native-contract:
-    runs-on: macos-14
+    runs-on: macos-15  # macos-14 images were retired ("configuration is not supported")
     steps:
       - uses: actions/checkout@v6
       - name: Install pinned uv
@@ -37,3 +37,17 @@ jobs:
             services/control-plane/tests/test_sync_helper_packaging.py -q
           bash -n scripts/bootstrap.sh scripts/start-local.sh scripts/stop-local.sh
           python3 scripts/verify-fresh-clone.py --dry-run
+      - name: Sample-cut smoke test (synthetic media, aac_at, PingFang subtitles)
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          ffmpeg -hide_banner -filters | grep -E " (ass|subtitles) " || echo "ffmpeg has no libass: render.py uses the Pillow subtitle fallback"
+          "$HOME/.local/bin/uv" sync --project tools/sample-cut --python 3.12 --locked
+          bash -n tools/cosyvoice/install.sh
+          "$HOME/.local/bin/uv" run --project tools/sample-cut python tools/sample-cut/smoke_test.py "$RUNNER_TEMP/sample-cut-smoke"
+      - name: Upload smoke frame
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-cut-smoke-macos
+          path: ${{ runner.temp }}/sample-cut-smoke/smoke-frame.png
+          if-no-files-found: ignore

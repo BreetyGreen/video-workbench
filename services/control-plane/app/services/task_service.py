@@ -213,10 +213,13 @@ def create_task_from_course_assets(
     voice_preset: str = "vivi-2",
     voice_type: str = "zh_female_vv_uranus_bigtts",
     course_recipe_id: str | None = None,
+    reference: CourseAsset | None = None,
 ) -> VideoTask:
     """Create an isolated render task from course-owned, rights-checked assets."""
     if not assets:
         raise ValueError("course_materials_required")
+    if reference is not None and not reference.mime_type.split(";", 1)[0].strip().lower().startswith("video/"):
+        raise ValueError("course_reference_must_be_video")
 
     task = VideoTask(
         title=title.strip(),
@@ -244,6 +247,20 @@ def create_task_from_course_assets(
     course_root = (settings.data_dir / "courses").resolve()
     task_dir = (settings.material_dir / task.id).resolve()
     task_dir.mkdir(parents=True, exist_ok=True)
+    if reference is not None:
+        # The reference cut is observed for pacing/structure only; it is stored
+        # beside the task but never appended to the editable material list.
+        source = Path(reference.stored_path).resolve()
+        if course_root not in source.parents or not source.is_file():
+            raise ValueError("course_asset_path_outside_storage")
+        suffix = _safe_extension(reference.original_name) or source.suffix.lower() or ".mp4"
+        destination = (task_dir / f"reference-{uuid4()}{suffix}").resolve()
+        if task_dir not in destination.parents:
+            raise ValueError("task_material_destination_outside_root")
+        shutil.copy2(source, destination)
+        task.production_settings.reference_name = Path(reference.original_name).name
+        task.production_settings.reference_path = str(destination)
+        task.production_settings.reference_sha256 = reference.sha256
     for asset in assets:
         source = Path(asset.stored_path).resolve()
         if course_root not in source.parents or not source.is_file():

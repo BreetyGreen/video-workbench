@@ -256,3 +256,40 @@ def test_planner_applies_voiceover_decision_and_replaces_source_captions(tmp_pat
     assert timeline.audio.original_gain_db == -22
     assert timeline.audio.voice_type == "zh_female_vv_uranus_bigtts"
     assert [cue.text for cue in timeline.captions] == ["它只是看起来很无辜。"]
+
+
+def test_director_beats_stretch_to_narration_within_material_bounds(tmp_path: Path):
+    from app.schemas.analysis import EditRecipe
+    from app.schemas.editing import MediaAnalysis
+    from app.services.timeline_service import TimelinePlanner
+
+    a = tmp_path / "a.mp4"
+    b = tmp_path / "b.mp4"
+    a.write_bytes(b"a")
+    b.write_bytes(b"b")
+    analyses = [MediaAnalysis(material_id="A", source_path=str(a), duration_seconds=3.0, width=1080, height=1920, has_audio=False),
+                MediaAnalysis(material_id="B", source_path=str(b), duration_seconds=2.0, width=1080, height=1920, has_audio=False)]
+    recipe = EditRecipe(hook_rules=["x"], target_duration_seconds=30, pacing=[{"from_second": 0, "to_second": 30, "instruction": "y"}],
+                        track_layout=["v"], caption_style="c", audio_rules=[], prohibited_elements=[],
+                        qa_thresholds={"max_silence_seconds": 1, "max_black_seconds": 1},
+                        director_plan={"version": 1, "beats": [
+                            {"purpose": "hook", "narration": "一", "material_id": "A", "source_start_seconds": 0.0, "source_end_seconds": 1.0, "rationale": "r"},
+                            {"purpose": "feature", "narration": "二", "material_id": "B", "source_start_seconds": 0.0, "source_end_seconds": 1.0, "rationale": "r"},
+                            {"purpose": "closing", "narration": "三", "material_id": "A", "source_start_seconds": 2.5, "source_end_seconds": 3.0, "rationale": "r"}]})
+    planner = TimelinePlanner()
+
+    plain = planner.plan(analyses, title="t", target_seconds=30, recipe=recipe)
+    assert round(plain.actual_duration_seconds, 3) == 2.5
+
+    stretched = planner.plan(analyses, title="t", target_seconds=30, recipe=recipe, stretch_to_seconds=4.0)
+    ends = [(c.material_id, round(c.source_start_seconds, 3), round(c.source_end_seconds, 3)) for c in stretched.clips]
+    # A's first beat may grow only up to 2.5 s (the later A beat starts there); B up to its 2.0 s length.
+    assert ends[0][0] == "A" and ends[0][2] <= 2.5 + 1e-6
+    assert ends[1][0] == "B" and ends[1][2] <= 2.0 + 1e-6
+    assert ends[2] == ("A", 2.5, 3.0)
+    assert abs(stretched.actual_duration_seconds - 4.0) < 0.01
+    assert stretched.warnings and "旁白优先" in stretched.warnings[0]
+
+    capped = planner.plan(analyses, title="t", target_seconds=30, recipe=recipe, stretch_to_seconds=9.0)
+    assert abs(capped.actual_duration_seconds - 5.0) < 0.01  # 2.5 + 2.0 + 0.5 is all the material allows
+    assert "余量由旁白轻微加速吸收" in capped.warnings[0]

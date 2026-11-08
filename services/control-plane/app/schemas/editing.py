@@ -154,6 +154,8 @@ class CaptionCue(BaseModel):
     source_end_seconds: float = Field(gt=0)
     emphasis_terms: list[str] = Field(default_factory=list)
     placement: Literal["bottom", "top", "middle"] = "bottom"
+    # "title" renders as the large opening product-name card; "caption" is narration text.
+    style: Literal["caption", "title"] = "caption"
 
 
 class AudioMixPlan(BaseModel):
@@ -165,7 +167,7 @@ class AudioMixPlan(BaseModel):
     voiceover_duration_seconds: float = Field(default=0, ge=0)
     decision_reason: str = ""
     bgm_path: str | None = None
-    bgm_gain_db: float = -18
+    bgm_gain_db: float = -15
     target_lufs: float = -14
     true_peak_db: float = -1.5
 

@@ -16,6 +16,7 @@ from app.schemas.editing import (
 )
 from app.services.audio_routing_service import AudioRoutingDecision
 from app.services.course_recipe_service import CourseEditingPolicy, CourseRule
+from app.services.director_service import validate_director_sources
 
 
 FILLER_WORDS = {"嗯", "呃", "啊", "额", "um", "uh", "erm", "like"}
@@ -157,6 +158,31 @@ class TimelinePlanner:
                         candidates.append(candidate)
         return candidates
 
+    @staticmethod
+    def _stretch_beats(director, by_id: dict, durations: list[float], wanted: float) -> tuple[list[float], str]:
+        beats = director.beats
+        caps: list[float] = []
+        for index, beat in enumerate(beats):
+            cap = by_id[beat.material_id].duration_seconds - beat.source_start_seconds
+            for other_index, other in enumerate(beats):
+                if (other_index != index and other.material_id == beat.material_id
+                        and other.source_start_seconds >= beat.source_end_seconds - 1e-6):
+                    cap = min(cap, other.source_start_seconds - beat.source_start_seconds)
+            caps.append(max(cap, durations[index]))
+        durations = list(durations)
+        for _ in range(8):
+            extra = wanted - sum(durations)
+            free = [index for index in range(len(beats)) if durations[index] < caps[index] - 1e-6]
+            if extra <= 1e-6 or not free:
+                break
+            weight = sum(durations[index] for index in free) or 1.0
+            for index in free:
+                durations[index] = min(caps[index], durations[index] + extra * durations[index] / weight)
+        reached = sum(durations)
+        note = (f"旁白优先：分镜按旁白自然时长延长至 {reached:.2f} 秒"
+                + ("" if reached >= wanted - 0.05 else f"，素材可用长度不足以覆盖 {wanted:.2f} 秒，余量由旁白轻微加速吸收"))
+        return durations, note
+
     def plan(
         self,
         analyses: list[MediaAnalysis],
@@ -168,6 +194,7 @@ class TimelinePlanner:
         reference_brief: ReferenceVideoBrief | None = None,
         audio_decision: AudioRoutingDecision | None = None,
         course_policy: CourseEditingPolicy | None = None,
+        stretch_to_seconds: float | None = None,
     ) -> EditingTimeline:
         if not analyses:
             raise ValueError("At least one media analysis is required")
@@ -182,42 +209,61 @@ class TimelinePlanner:
         )
         if course_policy is not None and course_policy.maximum_clip_seconds is not None:
             maximum_clip_seconds = min(maximum_clip_seconds, course_policy.maximum_clip_seconds)
-        candidates = self._candidates(
-            analyses,
-            maximum_clip_seconds=maximum_clip_seconds,
-        )
-        if not candidates:
-            raise ValueError("No usable media intervals were found")
-
-        hook_window = reference_brief.pacing.hook_window_seconds if reference_brief else 3
-        hook_pool = [item for item in candidates if item.start < hook_window] or candidates
-        if course_policy is not None and course_policy.hook_keywords:
-            def course_hook_score(item: Candidate) -> tuple[int, float, float]:
-                searchable = f"{item.reason} {item.source_path}".lower()
-                matches = sum(keyword.lower() in searchable for keyword in course_policy.hook_keywords)
-                return matches, item.score, -item.start
-
-            hook = max(hook_pool, key=course_hook_score)
-        else:
-            hook = max(hook_pool, key=lambda item: (item.score, -item.start))
-        selected = [hook]
-        remaining = [item for item in candidates if item != hook and _overlap_ratio(item, hook) < 0.8]
-        while sum(item.duration for item in selected) < target - 0.001 and remaining:
-            previous_material = selected[-1].material_id
-            alternatives = [item for item in remaining if item.material_id != previous_material]
-            pool = alternatives or remaining
-            chosen = max(pool, key=lambda item: (item.score, -item.start))
-            selected.append(chosen)
-            remaining = [item for item in remaining if item != chosen and _overlap_ratio(item, chosen) < 0.8]
-
+        director = recipe.director_plan if recipe else None
+        selected: list[Candidate] = []
+        if director is None:
+            candidates = self._candidates(analyses, maximum_clip_seconds=maximum_clip_seconds)
+            if not candidates:
+                raise ValueError("No usable media intervals were found")
+            hook_window = reference_brief.pacing.hook_window_seconds if reference_brief else 3
+            hook_pool = [item for item in candidates if item.start < hook_window] or candidates
+            if course_policy is not None and course_policy.hook_keywords:
+                def course_hook_score(item: Candidate) -> tuple[int, float, float]:
+                    searchable = f"{item.reason} {item.source_path}".lower()
+                    matches = sum(keyword.lower() in searchable for keyword in course_policy.hook_keywords)
+                    return matches, item.score, -item.start
+                hook = max(hook_pool, key=course_hook_score)
+            else:
+                hook = max(hook_pool, key=lambda item: (item.score, -item.start))
+            selected = [hook]
+            remaining = [item for item in candidates if item != hook and _overlap_ratio(item, hook) < 0.8]
+            while sum(item.duration for item in selected) < target - 0.001 and remaining:
+                alternatives = [item for item in remaining if item.material_id != selected[-1].material_id]
+                chosen = max(alternatives or remaining, key=lambda item: (item.score, -item.start))
+                selected.append(chosen)
+                remaining = [item for item in remaining if item != chosen and _overlap_ratio(item, chosen) < 0.8]
+        stretch_note = ""
+        if director is not None:
+            validate_director_sources(director, analyses)
+            by_id = {item.material_id: item for item in analyses}
+            durations = [b.source_end_seconds - b.source_start_seconds for b in director.beats]
+            total = sum(durations)
+            scale = min(1.0, target / total)
+            if any(duration * scale < .3 - 1e-9 for duration in durations):
+                raise ValueError('director_duration_cannot_preserve_all_beats')
+            durations = [duration * scale for duration in durations]
+            wanted = min(stretch_to_seconds or 0.0, self.max_automatic_seconds)
+            if wanted > sum(durations) + 1e-6:
+                # Narration first (tutorial rule): extend each beat's end within its
+                # own material and before any later beat of the same material, in
+                # proportion to its planned length, until the cut covers the voice.
+                durations, stretch_note = self._stretch_beats(director, by_id, durations, wanted)
+                target = max(target, min(sum(durations), self.max_automatic_seconds))
+            selected = [Candidate(
+                material_id=b.material_id, source_path=by_id[b.material_id].source_path,
+                start=b.source_start_seconds,
+                end=b.source_start_seconds + duration,
+                score=1, reason=f'director:{b.purpose}:{b.rationale}',
+                has_audio=by_id[b.material_id].has_audio,
+            ) for b, duration in zip(director.beats, durations, strict=True)]
         clips = []
         cursor = 0.0
-        hook_rule = course_policy.first("hook") if course_policy else None
-        pacing_rule = course_policy.first("pacing") if course_policy else None
-        cta_rule = course_policy.first("cta") if course_policy else None
+        hook_rule = course_policy.first("hook") if course_policy and director is None else None
+        pacing_rule = course_policy.first("pacing") if course_policy and director is None else None
+        cta_rule = course_policy.first("cta") if course_policy and director is None else None
         for index, candidate in enumerate(selected):
             available = target - cursor
-            if available < 0.3:
+            if available < 0.3 - 1e-9:
                 break
             duration = min(candidate.duration, available)
             applied_rule_ids: list[str] = []
@@ -242,6 +288,8 @@ class TimelinePlanner:
             clips.append(clip)
             cursor += duration
 
+        if director is not None and len(clips) != len(director.beats):
+            raise ValueError('director_beats_dropped')
         analysis_by_id = {item.material_id: item for item in analyses}
         captions = []
         for clip in clips:
@@ -332,7 +380,9 @@ class TimelinePlanner:
             target_duration_seconds=target,
             actual_duration_seconds=cursor,
             engine=(
-                "course_learned"
+                "director_plan"
+                if director is not None
+                else "course_learned"
                 if course_policy is not None
                 else "reference_guided"
                 if reference_brief is not None
@@ -363,6 +413,7 @@ class TimelinePlanner:
             removed_silence_seconds=removed_silence,
             source_count=len({clip.material_id for clip in clips}),
             rule_trace=rule_trace,
+            warnings=[stretch_note] if stretch_note else [],
         )
         validate_timeline(timeline, analyses)
         return timeline

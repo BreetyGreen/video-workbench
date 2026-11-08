@@ -92,6 +92,19 @@ class CourseEditJobCreate(BaseModel):
     commercial: bool = True
     quality_profile: str = Field(default="production", pattern="^(fast_preview|production|local_privacy)$")
     cloud_processing_allowed: bool = False
+    # Optional bounded selection: only course-owned, rights-checked material IDs.
+    material_ids: list[str] | None = Field(default=None, min_length=1, max_length=200)
+    requirements_text: str = Field(default="", max_length=5000)
+    # A course-owned reference asset is never attached implicitly; the caller
+    # must name it so the task records exactly which reference cut was used.
+    reference_asset_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class CourseProcessRequest(BaseModel):
+    quality_profile: str = Field(default="production", pattern="^(fast_preview|production|local_privacy)$")
+    cloud_processing_allowed: bool = False
+    # Run after the HTTP response; poll GET /api/courses/{id} for status.
+    background: bool = False
 
 
 class CourseEditJobRead(BaseModel):

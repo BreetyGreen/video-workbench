@@ -11,7 +11,7 @@ import secrets
 import shutil
 from typing import Callable
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -29,7 +29,7 @@ from app.adapters.volcano_tts import VolcanoTTSClient
 from app.adapters.volcengine_usage import VolcengineUsageClient
 from app.config import Settings
 from app.db import Database
-from app.models import CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun, TutorialSegment
+from app.models import Course, CourseAsset, CourseAssetRole, CourseEditJob, EditingRule, LicensedAsset, RightsStatus, TaskStatus, TutorialDemoRun, TutorialSegment
 from app.platforms.runtime import resolve_runtime_paths
 from app.schemas import (
     HealthRead,
@@ -57,6 +57,7 @@ from app.schemas.course_knowledge import (
     CourseEditJobCreate,
     CourseEditJobHandoffUpdate,
     CourseEditJobRead,
+    CourseProcessRequest,
     EditingRecipeRead,
     EditingRuleRead,
     ShotSearchResultRead,
@@ -79,7 +80,7 @@ from app.services.automation_service import (
     update_daily_schedule,
 )
 from app.services.review_service import ReviewService, apply_review, list_review_events
-from app.services.pipeline_service import PipelineService
+from app.services.pipeline_service import PipelineService, build_tts_client
 from app.services.material_library_service import MaterialLibraryService
 from app.services.cloud_usage_service import CloudUsageService, CredentialVerificationError
 from app.services.authorized_video_intake import AuthorizedVideoIntake
@@ -99,7 +100,8 @@ from app.services.provider_settings_service import ProviderSettingsService
 from app.services.jianying_runtime_service import JianyingRuntimeService
 from app.services.jianying_handoff_service import JianyingHandoffService
 from app.services.course_intake_service import CourseIntakeError, CourseIntakeService
-from app.services.tutorial_understanding_service import TutorialUnderstandingService
+from app.services.tutorial_understanding_service import TutorialUnderstandingService, reset_interrupted_course_processing
+from app.services.tutorial_video_study_service import TutorialVideoStudyService
 from app.services.course_material_analysis_service import CourseMaterialAnalysisService
 from app.services.course_material_search_service import CourseMaterialSearchService
 from app.services.course_edit_job_service import CourseEditJobService
@@ -149,14 +151,7 @@ def create_app(
         provider_settings.apply(provider_session, app_settings)
     review_service = ReviewService(app_settings.artifact_dir)
     analysis_client = dify_client or DifyClient(app_settings)
-    speech_client = tts_client or VolcanoTTSClient(
-        api_key=app_settings.volcano_tts_api_key or app_settings.volcano_asr_api_key,
-        resource_id=app_settings.volcano_tts_resource_id,
-        endpoint=app_settings.volcano_tts_endpoint,
-        voice_type=app_settings.volcano_tts_voice_type,
-        timeout_seconds=app_settings.volcano_tts_timeout_seconds,
-        ffprobe_bin=app_settings.ffprobe_bin,
-    )
+    speech_client = tts_client or build_tts_client(app_settings)
     pipeline_service = pipeline_service_override or PipelineService(
         app_settings,
         dify=analysis_client,
@@ -224,6 +219,7 @@ def create_app(
     tutorial_understanding = TutorialUnderstandingService(
         getattr(pipeline_analyzer, "transcriber", None),
         media_analyzer=pipeline_analyzer,
+        study=TutorialVideoStudyService(app_settings, getattr(pipeline_service, "director", None)),
     )
     course_material_analysis = CourseMaterialAnalysisService(app_settings)
     course_material_search = CourseMaterialSearchService()
@@ -273,6 +269,9 @@ def create_app(
         database.create_all()
         with Session(database.engine) as session:
             ensure_daily_schedule(session, app_settings)
+            interrupted = reset_interrupted_course_processing(session)
+            if interrupted:
+                logger.warning("marked %d interrupted course processing run(s) as failed", interrupted)
         if app_settings.automation_enabled and app_settings.automation_scheduler_enabled:
             automation_scheduler.start()
             app.state.automation_scheduler_started = True
@@ -995,13 +994,46 @@ def create_app(
             raise HTTPException(status_code=404, detail={"code": "course_not_found"})
         return course_read(*result)
 
-    @app.post("/api/courses/{course_id}/process", response_model=EditingRecipeRead)
+    @app.post("/api/courses/{course_id}/process", response_model=None)
     def process_course(
         course_id: str,
+        background_tasks: BackgroundTasks,
+        response: Response,
+        request: CourseProcessRequest | None = Body(default=None),
         session: Session = Depends(session_dependency),
-    ) -> EditingRecipeRead:
+    ):
+        options = request or CourseProcessRequest()
+        if options.background:
+            # Full tutorial-video study can take hours; run it after the response
+            # and let clients poll GET /api/courses/{course_id} (status field).
+            course = session.get(Course, course_id)
+            if course is None:
+                raise HTTPException(status_code=404, detail={"code": "course_not_found"})
+            if course.status == "processing":
+                raise HTTPException(status_code=409, detail={"code": "course_already_processing"})
+
+            def run_in_background() -> None:
+                with Session(database.engine) as background_session:
+                    try:
+                        tutorial_understanding.process(
+                            background_session,
+                            course_id,
+                            quality_profile=options.quality_profile,
+                            cloud_processing_allowed=options.cloud_processing_allowed,
+                        )
+                    except Exception:  # recorded on the course/run rows by the service
+                        logger.exception("background course processing failed for %s", course_id)
+
+            background_tasks.add_task(run_in_background)
+            response.status_code = status.HTTP_202_ACCEPTED
+            return {"course_id": course_id, "status": "processing", "background": True}
         try:
-            recipe = tutorial_understanding.process(session, course_id)
+            recipe = tutorial_understanding.process(
+                session,
+                course_id,
+                quality_profile=options.quality_profile,
+                cloud_processing_allowed=options.cloud_processing_allowed,
+            )
         except ValueError as error:
             code = str(error)
             status_code = 404 if code == "course_not_found" else 422
@@ -1086,6 +1118,9 @@ def create_app(
                 commercial=request.commercial,
                 quality_profile=request.quality_profile,
                 cloud_processing_allowed=request.cloud_processing_allowed,
+                material_ids=request.material_ids,
+                requirements_text=request.requirements_text,
+                reference_asset_id=request.reference_asset_id,
             )
         except ValueError as error:
             code = str(error)

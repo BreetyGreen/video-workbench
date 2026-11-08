@@ -30,7 +30,15 @@ class RenderService:
             ffmpeg_bin=settings.ffmpeg_bin,
             ffprobe_bin=settings.ffprobe_bin,
         )
-        self.captions = CaptionService()
+        self.captions = CaptionService(
+            font_name=settings.caption_font_name,
+            font_size=settings.caption_font_size,
+            outline=settings.caption_outline,
+            title_font_size=settings.caption_title_font_size,
+            highlight_color=settings.caption_highlight_color,
+            shadow=settings.caption_shadow,
+            pop_in=settings.caption_pop_in,
+        )
 
     @staticmethod
     def _filter_path(path: Path) -> str:
@@ -38,9 +46,13 @@ class RenderService:
         value = value.replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
         return value
 
-    @staticmethod
-    def _run(command: list[str]) -> None:
-        completed = subprocess.run(command, capture_output=True, text=True)
+    def _run(self, command: list[str]) -> None:
+        timeout = max(30.0, float(self.settings.render_timeout_seconds))
+        try:
+            completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            # A hung encoder must fail the task, never block the worker forever.
+            raise RuntimeError(f"FFmpeg render timed out after {timeout:.0f}s") from error
         if completed.returncode != 0:
             diagnostic = "\n".join(completed.stderr.strip().splitlines()[-12:])
             raise RuntimeError(f"FFmpeg render failed:\n{diagnostic}")
@@ -88,7 +100,7 @@ class RenderService:
             voice_gain = math.pow(10, audio.voiceover_gain_db / 20)
             parts.extend(
                 [
-                    f"[{next_input}:a:0]atrim=duration={timeline.actual_duration_seconds:.3f},asetpts=PTS-STARTPTS,aresample=48000,volume={voice_gain:.6f},apad=whole_dur={timeline.actual_duration_seconds:.3f},atrim=duration={timeline.actual_duration_seconds:.3f}[voice]",
+                    f"[{next_input}:a:0]atrim=duration={timeline.actual_duration_seconds:.3f},asetpts=PTS-STARTPTS,aresample=48000,volume={voice_gain:.6f},acompressor=threshold=-18dB:ratio=2.5:attack=6:release=90,apad=whole_dur={timeline.actual_duration_seconds:.3f},atrim=duration={timeline.actual_duration_seconds:.3f}[voice]",
                     "[original][voice]amix=inputs=2:duration=longest:dropout_transition=0[program]",
                 ]
             )
@@ -98,11 +110,15 @@ class RenderService:
         if audio.bgm_path:
             bgm_index = next_input
             linear_gain = math.pow(10, audio.bgm_gain_db / 20)
+            # The program feeds both the ducking sidechain and the final mix, so it
+            # must be split explicitly: consuming one label twice deadlocks FFmpeg
+            # once the inputs are longer than its internal buffers.
             parts.extend(
                 [
-                    f"[{bgm_index}:a:0]atrim=duration={timeline.actual_duration_seconds:.3f},asetpts=PTS-STARTPTS,volume={linear_gain:.6f}[bgm]",
-                    "[bgm][program]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[ducked]",
-                    f"[program][ducked]amix=inputs=2:duration=first:dropout_transition=0,loudnorm=I={audio.target_lufs:g}:TP={audio.true_peak_db:g}:LRA=11[aout]",
+                    f"[{bgm_index}:a:0]atrim=duration={timeline.actual_duration_seconds:.3f},asetpts=PTS-STARTPTS,aresample=48000,volume={linear_gain:.6f}[bgm]",
+                    "[program]asplit=2[program_mix][sidechain]",
+                    "[bgm][sidechain]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[ducked]",
+                    f"[program_mix][ducked]amix=inputs=2:duration=first:dropout_transition=0,loudnorm=I={audio.target_lufs:g}:TP={audio.true_peak_db:g}:LRA=11[aout]",
                 ]
             )
         else:
@@ -122,7 +138,16 @@ class RenderService:
             command.extend(["-i", str(voiceover)])
         if timeline.audio.bgm_path:
             bgm = self.ffmpeg._require_source(Path(timeline.audio.bgm_path))
-            command.extend(["-stream_loop", "-1", "-i", str(bgm)])
+            # Loop the bed a finite number of times and cap the input read length:
+            # an unbounded `-stream_loop -1` never reaches EOF once a voiceover is
+            # mixed in and FFmpeg 9 then spins forever while buffering.
+            needed = timeline.actual_duration_seconds + 1.0
+            try:
+                bgm_seconds = max(0.1, float(self.ffmpeg.probe_media(bgm).duration_seconds or 0.0))
+            except Exception:
+                bgm_seconds = 0.1
+            loops = max(0, math.ceil(needed / bgm_seconds) - 1)
+            command.extend(["-stream_loop", str(loops), "-t", f"{needed:.3f}", "-i", str(bgm)])
         graph, video_label, audio_label = self._build_filter(timeline, ass_path)
         command.extend(
             [

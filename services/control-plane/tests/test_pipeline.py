@@ -308,17 +308,21 @@ def test_integration_status_is_explicit_when_credentials_are_missing(pipeline_cl
     assert response.json()["douyin_delivery"]["status"] == "oauth_required"
 
 
+@pytest.mark.parametrize('allow_cloud', [False, True])
 def test_pipeline_generates_conditional_voiceover_and_records_audio_route(
     tmp_path: Path,
     ffmpeg_bin: str,
     ffprobe_bin: str,
     ffmpeg_fixture: Path,
+    allow_cloud: bool,
 ):
+    voice_requests = []
     class FakeTTS:
         configured = True
         voice_type = "zh_female_vv_uranus_bigtts"
 
         def synthesize(self, text: str, output: Path) -> TTSResult:
+            voice_requests.append(text)
             assert "萌宠" in text
             subprocess.run(
                 [
@@ -357,6 +361,7 @@ def test_pipeline_generates_conditional_voiceover_and_records_audio_route(
             "/api/tasks",
             data={
                 "title": "萌宠反差日常",
+                "cloud_processing_allowed": str(allow_cloud).lower(),
                 "content_type": "萌宠",
                 "requirements_text": "治愈、轻反差，不虚构具体事件。",
                 "rights_confirmed": "true",
@@ -370,6 +375,10 @@ def test_pipeline_generates_conditional_voiceover_and_records_audio_route(
         artifact_dir = settings.artifact_dir / created["id"]
         review = json.loads((artifact_dir / "review.json").read_text(encoding="utf-8"))
         timeline = json.loads((artifact_dir / "edit-timeline.json").read_text(encoding="utf-8"))
+        if not allow_cloud:
+            assert voice_requests == []
+            assert review['audio_route']['voiceover_used'] is False
+            return
         assert review["audio_route"]["mode"] == "narration"
         assert review["audio_route"]["voice_type"] == "zh_female_vv_uranus_bigtts"
         assert review["audio_route"]["voiceover_used"] is True
@@ -385,15 +394,23 @@ def test_pipeline_generates_conditional_voiceover_and_records_audio_route(
         assert usage["totals"]["voiceover_seconds"] == 1
 
 
+@pytest.mark.parametrize('with_director', [False, True])
 def test_pipeline_applies_tutorial_recipe_and_viral_copy(
     tmp_path: Path,
     ffmpeg_bin: str,
     ffprobe_bin: str,
     ffmpeg_fixture: Path,
+    with_director: bool,
 ):
     requests: list[dict[str, object]] = []
+    uploaded_frames = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith('/files/upload'):
+            assert request.headers['authorization'] == 'Bearer tutorial-key'
+            assert b'filename="frame-' in request.content
+            uploaded_frames.append(request.content)
+            return httpx.Response(201, json={'id': f'frame-{len(uploaded_frames)}'})
         payload = json.loads(request.content)
         requests.append(payload)
         if request.headers["authorization"] == "Bearer tutorial-key":
@@ -407,6 +424,15 @@ def test_pipeline_applies_tutorial_recipe_and_viral_copy(
                 "prohibited_elements": ["第三方水印"],
                 "qa_thresholds": {"max_silence_seconds": 1.0, "max_black_seconds": 0.5},
             }
+            if with_director:
+                catalog = json.loads(payload['inputs']['frame_descriptions'])['material_catalog']
+                material_id = catalog[0]['material_id']
+                output['director_plan'] = {'version': 1, 'beats': [
+                    {'purpose': 'hook', 'narration': '先看这里。', 'material_id': material_id,
+                     'source_start_seconds': 1, 'source_end_seconds': 1.5, 'rationale': '测试片段一'},
+                    {'purpose': 'closing', 'narration': '再看细节。', 'material_id': material_id,
+                     'source_start_seconds': 0, 'source_end_seconds': .5, 'rationale': '测试片段二'},
+                ]}
         else:
             output = {
                 "summary": "公开高赞样本常用结果前置",
@@ -461,7 +487,21 @@ def test_pipeline_applies_tutorial_recipe_and_viral_copy(
         render_preset="ultrafast",
     )
     dify = DifyClient(settings, transport=httpx.MockTransport(handler))
-    with TestClient(create_app(settings, dify_client=dify)) as client:
+    synthesized_text = []
+    class DirectorTestTTS:
+        configured = with_director
+        voice_type = 'test-tone-not-real-speech'
+
+        def synthesize(self, text, output, **kwargs):
+            synthesized_text.append(text)
+            output = output.with_suffix('.wav')
+            subprocess.run([ffmpeg_bin, '-v', 'error', '-f', 'lavfi', '-i',
+                            'sine=frequency=440:sample_rate=24000:d=1', str(output)],
+                           check=True, capture_output=True)
+            return TTSResult(path=output, duration_seconds=1, voice_type=self.voice_type,
+                             character_count=len(text))
+
+    with TestClient(create_app(settings, dify_client=dify, tts_client=DirectorTestTTS())) as client:
         trend = client.post(
             "/api/trends/import",
             json={
@@ -485,6 +525,7 @@ def test_pipeline_applies_tutorial_recipe_and_viral_copy(
             "/api/tasks",
             data={
                 "title": "教程驱动样例",
+                "cloud_processing_allowed": "true",
                 "content_type": "宠物",
                 "rights_confirmed": "true",
                 "requirements_text": "竖屏，节奏快，保留原声",
@@ -506,12 +547,31 @@ def test_pipeline_applies_tutorial_recipe_and_viral_copy(
         assert review["publish_copy"][0]["title"] == "Dify 标题1"
         assert any("Dify 教程配方" in item for item in review["evidence"])
         assert requests[0]["inputs"]["tutorial_text"] == "开头一秒展示结果，然后快速切镜。"
+        assert 1 <= len(uploaded_frames) <= 8
+        assert requests[0]['inputs']['visual_frames'][0]['upload_file_id'] == 'frame-1'
+        frame_manifest = json.loads(requests[0]['inputs']['frame_descriptions'])['visual_frames']
+        assert len(frame_manifest) == len(uploaded_frames)
+        visual = json.loads((artifact_dir / 'analysis' / 'visual-input-evidence.json').read_text(encoding='utf-8'))
+        assert visual['transport_status'] == 'workflow_returned'
+        assert visual['model_visual_use'] == 'unknown'
+        assert visual['frames'] == frame_manifest
         assert "12000" in requests[1]["inputs"]["trend_records"]
         usage = client.get(f"/api/tasks/{created['id']}/usage").json()
         assert usage["totals"]["input_tokens"] == 240
         assert usage["totals"]["output_tokens"] == 160
         assert usage["totals"]["total_tokens"] == 400
-        assert {event["request_id"] for event in usage["events"]} == {"run-1", "run-2"}
+        assert {event["request_id"] for event in usage["events"] if event['request_id']} == {"run-1", "run-2"}
+        creative = client.get(f"/api/tasks/{created['id']}/manifest").json()['creative_validation']
+        assert creative['semantic_match'] == 'unknown'
+        assert '表达效果尚未独立验证' in client.get(f"/review/{created['id']}").text
+        if with_director:
+            assert creative['mode'] == 'director_plan'
+            assert synthesized_text == ['先看这里。再看细节。']
+            assert review['audio_route']['narration_text'] == synthesized_text[0]
+            assert creative['narration_applied'] is True
+            timeline = json.loads((artifact_dir / 'edit-timeline.json').read_text(encoding='utf-8'))
+            assert [c['source_start_seconds'] for c in timeline['clips']] == [1, 0]
+            assert client.get(f"/api/tasks/{created['id']}/artifacts/director-plan.json").status_code == 200
 
 
 def test_pipeline_uses_all_video_materials_for_one_timeline_and_draft(

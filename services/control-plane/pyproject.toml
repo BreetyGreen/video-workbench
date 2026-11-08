@@ -9,6 +9,7 @@ description = "Local task and artifact control plane for the automated video wor
 requires-python = ">=3.11,<3.14"
 dependencies = [
   "cryptography==46.0.1",
+  "dashscope==1.27.5",
   "fastapi==0.116.1",
   "faster-whisper==1.2.1",
   "httpx==0.28.1",

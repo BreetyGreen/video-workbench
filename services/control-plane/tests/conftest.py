@@ -12,6 +12,12 @@ def disable_background_scheduler(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep unit tests isolated from the persisted daily automation schedule."""
     monkeypatch.setenv("VIDEO_WORKBENCH_AUTOMATION_SCHEDULER_ENABLED", "false")
     monkeypatch.setenv("VIDEO_WORKBENCH_PUBLIC_TREND_WEB_ENABLED", "false")
+    # A developer .env may hold real director credentials; tests must opt in explicitly.
+    monkeypatch.setenv("VIDEO_WORKBENCH_DIRECTOR_BASE_URL", "")
+    monkeypatch.setenv("VIDEO_WORKBENCH_DIRECTOR_API_KEY", "")
+    monkeypatch.setenv("VIDEO_WORKBENCH_DASHSCOPE_API_KEY", "")
+    monkeypatch.setenv("VIDEO_WORKBENCH_DASHSCOPE_BASE_URL", "")
+    monkeypatch.setenv("VIDEO_WORKBENCH_SPEECH_PROVIDER", "auto")
 
 
 def find_media_tool(name: str) -> str:

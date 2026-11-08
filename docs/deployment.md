@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-server.ps1 -SshTarget us
 ## 同步助手发布
 
 - 本地构建：Windows 运行 `sync-helper/build.ps1`，macOS 运行 `sync-helper/build.sh`。
-- 自动构建：推送 `sync-helper-v*` 标签后，`.github/workflows/sync-helper-release.yml` 在 `windows-latest` 和 `macos-14` 分别生成产物并上传到草稿 Release；完成签名、公证和实机验收后才手动公开。
+- 自动构建：推送 `sync-helper-v*` 标签后，`.github/workflows/sync-helper-release.yml` 在 `windows-latest` 和 `macos-15` 分别生成产物并上传到草稿 Release；完成签名、公证和实机验收后才手动公开。
 - Windows 安装器优先使用 B 盘；没有 B 盘时回退到当前用户的 `LOCALAPPDATA`，不会假设所有用户磁盘布局相同。
 - macOS 使用 `~/Applications`、`~/Library/Application Support` 和用户级 LaunchAgent，不要求管理员修改系统目录。
 - GitHub Actions 当前生成的是未签名构建。对外发布前必须补充 Authenticode 和 Apple Developer ID/公证；这一步需要仓库所有者提供签名身份，不能由代码自行伪造。

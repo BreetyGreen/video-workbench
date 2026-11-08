@@ -15,8 +15,25 @@ class Settings(BaseSettings):
     usage_secret_master_key: str = ""
     dify_base_url: str = ""
     dify_tutorial_api_key: str = ""
+    dify_tutorial_workflow_revision: str = ""
     dify_viral_api_key: str = ""
     dify_timeout_seconds: float = 90.0
+    # Director (shot plan + narration) through any OpenAI-compatible chat endpoint,
+    # e.g. Alibaba DashScope compatible-mode. Takes precedence over Dify when set.
+    director_base_url: str = ""
+    director_api_key: str = ""
+    director_model: str = "qwen3-vl-plus"
+    director_timeout_seconds: float = 240.0
+    director_max_output_tokens: int = 4096
+    director_disable_thinking: bool = True
+    # Full tutorial-video study through the director endpoint (video input, chunked).
+    tutorial_study_enabled: bool = True
+    tutorial_study_model: str = ""
+    tutorial_study_chunk_seconds: int = 120
+    tutorial_study_fps: float = 0.5
+    tutorial_study_concurrency: int = 3
+    tutorial_study_max_chunk_bytes: int = 9_000_000
+    tutorial_study_max_output_tokens: int = 6144
     dingtalk_client_id: str = ""
     dingtalk_client_secret: str = ""
     course_max_file_bytes: int = 500 * 1024 * 1024
@@ -40,12 +57,46 @@ class Settings(BaseSettings):
     volcano_tts_endpoint: str = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
     volcano_tts_voice_type: str = "zh_female_vv_uranus_bigtts"
     volcano_tts_timeout_seconds: float = 90.0
+    # Speech provider: "auto" picks DashScope when its key/base URL are set, else Volcano.
+    speech_provider: str = "auto"
+    dashscope_api_key: str = ""
+    dashscope_base_url: str = ""
+    dashscope_asr_model: str = "paraformer-v2"
+    dashscope_asr_timeout_seconds: float = 900.0
+    dashscope_tts_model: str = "qwen3-tts-flash"
+    dashscope_tts_voice: str = "Cherry"
+    # Optional delivery instruction; requires an instruction-capable model such as qwen3-tts-instruct-flash.
+    dashscope_tts_instructions: str = ""
+    dashscope_tts_timeout_seconds: float = 120.0
+    # "qwen" = Qwen3-TTS HTTP models; "cosyvoice" = CosyVoice v2 (DashScope SDK, WebSocket), the more
+    # natural-sounding Chinese voices such as longxiaochun_v2.
+    dashscope_tts_engine: str = "qwen"
+    dashscope_cosyvoice_model: str = "cosyvoice-v2"
+    dashscope_cosyvoice_voice: str = "longxiaochun_v2"
+    dashscope_cosyvoice_speech_rate: float = 1.0
+    # Caption presentation (ASS, 1080x1920 canvas)
+    caption_font_name: str = "Microsoft YaHei"
+    caption_font_size: int = 90
+    caption_outline: int = 6
+    caption_title_font_size: int = 150
+    # "花字" look: highlighted punch words (RGB hex), drop shadow depth, and a pop-in
+    # entrance on every cue (ASS scale animation; Jianying 弹入/放大 intro).
+    caption_highlight_color: str = "FFE500"
+    caption_shadow: int = 4
+    caption_pop_in: bool = True
+    # Narration claim guard: comma-separated terms a product narration must never contain
+    # (price hints, unverifiable health/ingredient claims). One director retry, then fallback.
+    prohibited_narration_terms: str = (
+        "划算,便宜,性价比,优惠,折扣,限时,秒杀,包邮,无糖,0糖,零糖,低糖,无添加,零添加,纯天然,"
+        "降火,清热,去火,解暑,祛湿,助消化,减肥,瘦身,美白,治疗,疗效,功效,排毒"
+    )
     ocr_enabled: bool = True
     scene_threshold: float = 0.25
     silence_threshold_db: float = -42.0
     silence_minimum_seconds: float = 0.8
     keyframe_limit: int = 12
     render_preset: str = "medium"
+    render_timeout_seconds: float = 1800.0
     render_crf: int = 23
     quality_max_black_seconds: float = 0.5
     quality_max_silence_seconds: float = 1.5
@@ -79,6 +130,12 @@ class Settings(BaseSettings):
     seedance_api_key: str = ""
     seedance_model: str = ""
     seedance_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
+
+    @property
+    def dashscope_speech_selected(self) -> bool:
+        configured = bool(self.dashscope_api_key.strip() and self.dashscope_base_url.strip())
+        provider = self.speech_provider.strip().lower()
+        return provider == "dashscope" or (provider == "auto" and configured)
 
     @property
     def material_dir(self) -> Path:

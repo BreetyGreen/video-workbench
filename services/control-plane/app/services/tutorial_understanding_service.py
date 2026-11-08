@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +21,7 @@ from app.models import (
     TutorialSegmentType,
 )
 from app.schemas.editing import FrameEvidence, MediaAnalysis, TranscriptResult
+from app.services.course_recipe_service import ALLOWED_COURSE_RULES
 
 
 TIME_RANGE = re.compile(r"(?P<start>\d+(?:\.\d+)?)\s*[-—~至]\s*(?P<end>\d+(?:\.\d+)?)\s*秒")
@@ -46,6 +47,9 @@ class ExtractedTutorialSegment:
     classification_confidence: float
     ocr_texts: tuple[str, ...] = ()
     visual_cues: tuple[str, ...] = ()
+    # Model-provided rule category (validated later) and whether a LECTURE row is a rule at all.
+    category: str | None = None
+    rule_candidate: bool = True
 
 
 def _category(text: str) -> str:
@@ -68,10 +72,102 @@ def _category(text: str) -> str:
     return "structure"
 
 
+def reset_interrupted_course_processing(session: Session) -> int:
+    """Courses left in ``processing`` by a crashed or restarted worker can never finish; mark them failed."""
+    count = 0
+    for run in session.exec(select(CourseProcessingRun).where(CourseProcessingRun.state == "processing")).all():
+        run.state = "failed"
+        run.error_code = "interrupted_by_restart"
+        run.finished_at = datetime.now(UTC)
+        session.add(run)
+        count += 1
+    for course in session.exec(select(Course).where(Course.status == "processing")).all():
+        course.status = "failed"
+        course.updated_at = datetime.now(UTC)
+        session.add(course)
+    if count:
+        session.commit()
+    return count
+
+
 class TutorialUnderstandingService:
-    def __init__(self, transcriber: Any | None = None, *, media_analyzer: Any | None = None):
+    def __init__(self, transcriber: Any | None = None, *, media_analyzer: Any | None = None, study: Any | None = None):
         self.transcriber = transcriber
         self.media_analyzer = media_analyzer
+        self.study = study
+
+    _STUDY_TYPE_MAP = {
+        "lecture": TutorialSegmentType.LECTURE,
+        "software_operation": TutorialSegmentType.SOFTWARE_OPERATION,
+        "finished_example": TutorialSegmentType.FINISHED_EXAMPLE,
+        "intro_outro": TutorialSegmentType.INTRO_OUTRO,
+    }
+
+    @staticmethod
+    def _cached_analysis(asset: CourseAsset, source: Path) -> MediaAnalysis | None:
+        """Reuse this asset's own analysis sidecar so a re-run never pays for transcription twice."""
+        sidecar = source.with_suffix(".tutorial-analysis.json")
+        try:
+            if not sidecar.is_file() or sidecar.stat().st_size > 32 * 1024 * 1024:
+                return None
+            analysis = MediaAnalysis.model_validate_json(sidecar.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if analysis.material_id != asset.id or not analysis.transcript.segments:
+            return None
+        return analysis
+
+    def _study_segments(self, asset: CourseAsset, source: Path, transcript: TranscriptResult,
+                        duration_seconds: float | None, *, cloud_processing_allowed: bool) -> list[ExtractedTutorialSegment] | None:
+        """Full-video study through the vision model; None means fall back to local heuristics."""
+        if self.study is None or not getattr(self.study, "configured", False) or not cloud_processing_allowed:
+            return None
+        work_dir = source.parent / "analysis" / "tutorial-study" / asset.id
+        try:
+            lesson = self.study.study(source, transcript, work_dir, duration_seconds=duration_seconds)
+        except Exception as error:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            (work_dir / "study-error.json").write_text(
+                json.dumps({"error_type": type(error).__name__, "message": str(error)[:1000]}, ensure_ascii=False),
+                encoding="utf-8")
+            return None
+        source.with_suffix(".lesson-study.json").write_text(lesson.model_dump_json(indent=1), encoding="utf-8")
+        if not lesson.segments:
+            return None
+        result: list[ExtractedTutorialSegment] = []
+        page = 0
+        for segment in lesson.segments:
+            page += 1
+            result.append(ExtractedTutorialSegment(
+                text=segment.summary, start_ms=segment.start_ms, end_ms=segment.end_ms, source_page=page,
+                transcript_confidence=1.0 if transcript.segments else 0.0,
+                segment_type=self._STUDY_TYPE_MAP.get(segment.type, TutorialSegmentType.UNKNOWN),
+                classification_confidence=0.9,
+                visual_cues=("source:vision_model_study", *[f"action:{item}" for item in segment.teacher_actions[:12]]),
+                rule_candidate=False,
+            ))
+        for rule in lesson.rules:
+            page += 1
+            result.append(ExtractedTutorialSegment(
+                text=rule.instruction, start_ms=rule.start_ms, end_ms=rule.end_ms, source_page=page,
+                transcript_confidence=1.0 if transcript.segments else 0.0,
+                segment_type=TutorialSegmentType.LECTURE, classification_confidence=0.9,
+                visual_cues=("source:vision_model_study", f"evidence:{rule.evidence_quote[:300]}") if rule.evidence_quote
+                else ("source:vision_model_study",),
+                category=rule.category, rule_candidate=True,
+            ))
+        result.sort(key=lambda item: (item.start_ms or 0, item.end_ms or 0, item.source_page))
+        # TutorialSegment rows are unique per (asset, start_ms, end_ms); a rule quoted at
+        # exactly its parent segment's span would collide, so nudge duplicates by 1 ms.
+        seen: set[tuple[int, int]] = set()
+        unique: list[ExtractedTutorialSegment] = []
+        for item in result:
+            start_ms, end_ms = item.start_ms or 0, item.end_ms or 0
+            while (start_ms, end_ms) in seen:
+                end_ms += 1
+            seen.add((start_ms, end_ms))
+            unique.append(item if end_ms == (item.end_ms or 0) else replace(item, end_ms=end_ms))
+        return unique
 
     @staticmethod
     def _nearby_ocr(frames: list[FrameEvidence], start_ms: int, end_ms: int) -> tuple[str, ...]:
@@ -226,18 +322,20 @@ class TutorialUnderstandingService:
         if asset.mime_type.startswith(("video/", "audio/")):
             analysis: MediaAnalysis | None = None
             if asset.mime_type.startswith("video/") and self.media_analyzer is not None:
-                analysis = self.media_analyzer.analyze(
-                    source,
-                    material_id=asset.id,
-                    output_dir=source.parent / "analysis" / "tutorial-evidence",
-                    quality_profile=quality_profile,
-                    cloud_processing_allowed=cloud_processing_allowed,
-                )
+                analysis = self._cached_analysis(asset, source)
+                if analysis is None:
+                    analysis = self.media_analyzer.analyze(
+                        source,
+                        material_id=asset.id,
+                        output_dir=source.parent / "analysis" / "tutorial-evidence",
+                        quality_profile=quality_profile,
+                        cloud_processing_allowed=cloud_processing_allowed,
+                    )
+                    source.with_suffix(".tutorial-analysis.json").write_text(
+                        analysis.model_dump_json(indent=2),
+                        encoding="utf-8",
+                    )
                 transcript = analysis.transcript
-                source.with_suffix(".tutorial-analysis.json").write_text(
-                    analysis.model_dump_json(indent=2),
-                    encoding="utf-8",
-                )
             else:
                 if self.transcriber is None:
                     raise ValueError("tutorial_transcriber_unavailable")
@@ -250,6 +348,12 @@ class TutorialUnderstandingService:
                 transcript.model_dump_json(indent=2),
                 encoding="utf-8",
             )
+            if asset.mime_type.startswith("video/"):
+                studied = self._study_segments(asset, source, transcript,
+                                               analysis.duration_seconds if analysis is not None else None,
+                                               cloud_processing_allowed=cloud_processing_allowed)
+                if studied:
+                    return studied
             raw_segments = self._split_transcript(transcript)
             if analysis is not None:
                 raw_segments = self._insert_visual_gaps(raw_segments, analysis)
@@ -345,10 +449,13 @@ class TutorialUnderstandingService:
             for tutorial, segment in extracted:
                 if segment.segment_type != TutorialSegmentType.LECTURE or not segment.text.strip():
                     continue
+                if not segment.rule_candidate:
+                    continue
                 rule_order += 1
                 rule = EditingRule(
                         recipe_id=recipe.id,
-                        category=_category(segment.text),
+                        category=(segment.category if segment.category in ALLOWED_COURSE_RULES else None)
+                        or _category(segment.text),
                         instruction=segment.text,
                         evidence_text=segment.text,
                         confidence=segment.classification_confidence,

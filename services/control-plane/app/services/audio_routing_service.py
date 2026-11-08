@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from app.adapters.volcano_tts import TTSResult
 from app.schemas.editing import CaptionCue, MediaAnalysis
+from app.services.caption_emphasis_service import emphasis_terms
 from app.services.caption_service import CaptionService
 
 
@@ -45,8 +46,9 @@ class AudioRoutingService:
         return "mixed" if speech_seconds > 0 else "narration"
 
     @staticmethod
-    def _captions(text: str, duration_seconds: float, *, content_type: str = "") -> list[CaptionCue]:
-        parts = CaptionService.segment_text(text, max_chars=16)
+    def _captions(text: str, duration_seconds: float, *, content_type: str = "",
+                  product_terms: tuple[str, ...] | list[str] = ()) -> list[CaptionCue]:
+        parts = CaptionService.segment_text(text, max_chars=16, sentence_per_chunk=True)
         if not parts:
             return []
         duration = max(0.2, duration_seconds)
@@ -63,6 +65,9 @@ class AudioRoutingService:
                 for fragment in fragments
                 if guided_explainer and any(keyword in fragment for keyword in ("不再", "效果", "步骤", "卖点", "只差", "先看", "前后"))
             ]
+            if not emphasis:
+                # Punch-word highlight (numbers with units, product name, sensory words).
+                emphasis = emphasis_terms(part, product_terms=product_terms)
             captions.append(
                 CaptionCue(
                     material_id="voiceover",
@@ -72,7 +77,7 @@ class AudioRoutingService:
                     source_start_seconds=cursor,
                     source_end_seconds=end,
                     emphasis_terms=emphasis,
-                    placement="top" if guided_explainer and index == 0 else "bottom",
+                    placement="top" if guided_explainer else "bottom",
                 )
             )
             cursor = end
@@ -85,6 +90,7 @@ class AudioRoutingService:
         narration_text: str,
         voiceover: TTSResult | None,
         content_type: str = "",
+        product_terms: tuple[str, ...] | list[str] = (),
     ) -> AudioRoutingDecision:
         speech_seconds = self._speech_seconds(analyses)
         planned_mode = self.planned_mode(analyses, content_type=content_type)
@@ -113,5 +119,6 @@ class AudioRoutingService:
             voiceover_gain_db=0,
             voice_type=voiceover.voice_type,
             voiceover_duration_seconds=voiceover.duration_seconds,
-            captions=self._captions(narration_text.strip(), voiceover.duration_seconds, content_type=content_type),
+            captions=self._captions(narration_text.strip(), voiceover.duration_seconds, content_type=content_type,
+                                    product_terms=product_terms),
         )

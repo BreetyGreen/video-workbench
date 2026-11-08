@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.adapters.ffmpeg import FfmpegAdapter
+from app.adapters.dashscope_speech import DashScopeParaformerTranscriber
 from app.adapters.transcription import RoutedTranscriber, VolcanoBigASRTranscriber, WhisperTranscriber
 from app.config import Settings
 from app.schemas.editing import MediaAnalysis, TranscriptResult
@@ -40,15 +41,24 @@ class MediaAnalysisService:
                 compute_type=settings.whisper_compute_type,
                 cpu_threads=settings.whisper_cpu_threads,
             )
-            cloud = VolcanoBigASRTranscriber(
-                api_key=settings.volcano_asr_api_key,
-                app_key=settings.volcano_asr_app_key,
-                access_key=settings.volcano_asr_access_key,
-                resource_id=settings.volcano_asr_resource_id,
-                endpoint=settings.volcano_asr_endpoint,
-                timeout_seconds=settings.volcano_asr_timeout_seconds,
-                ffmpeg_bin=settings.ffmpeg_bin,
-            )
+            if settings.dashscope_speech_selected:
+                cloud = DashScopeParaformerTranscriber(
+                    api_key=settings.dashscope_api_key,
+                    base_url=settings.dashscope_base_url,
+                    model=settings.dashscope_asr_model,
+                    timeout_seconds=settings.dashscope_asr_timeout_seconds,
+                    ffmpeg_bin=settings.ffmpeg_bin,
+                )
+            else:
+                cloud = VolcanoBigASRTranscriber(
+                    api_key=settings.volcano_asr_api_key,
+                    app_key=settings.volcano_asr_app_key,
+                    access_key=settings.volcano_asr_access_key,
+                    resource_id=settings.volcano_asr_resource_id,
+                    endpoint=settings.volcano_asr_endpoint,
+                    timeout_seconds=settings.volcano_asr_timeout_seconds,
+                    ffmpeg_bin=settings.ffmpeg_bin,
+                )
             self.transcriber = RoutedTranscriber(preview=preview, quality=quality, cloud=cloud)
         self._ocr_reader = ocr_reader
         self._ocr_engine: Any | None = None

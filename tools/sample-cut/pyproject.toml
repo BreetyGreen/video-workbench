@@ -1,0 +1,14 @@
+[project]
+name = "sample-cut-tools"
+version = "0.1.0"
+description = "Sample-standard product video cut: takes, voice, render, BGM, Jianying draft (Windows + macOS)"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "dashscope==1.27.5",
+  "numpy==2.4.6",
+  "pillow==12.3.0",
+  "pyJianYingDraft==0.3.0",
+]
+
+[tool.uv]
+package = false

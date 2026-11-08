@@ -105,6 +105,19 @@
           {% else %}<p class="muted">尚未生成剪辑时间线</p>{% endfor %}
         </div>
       </section>
+      {% set creative = manifest.get('creative_validation', {}) %}
+      {% if creative %}
+      <section class="panel" aria-label="内容与风格验证">
+        <h2>表达效果尚未独立验证</h2>
+        <p>{{ '已应用统一分镜计划' if creative.get('mode') == 'director_plan' else '本地模板预览：未获得统一分镜计划' }}。
+        镜头语义、商品卖点和参考风格仍待独立核验；技术质检通过不代表效果达标。</p>
+        <p>配音：{{ '已应用' if creative.get('narration_applied') else '未应用，保留原声' }}。
+          {% if creative.get('caption_alignment') == 'word_aligned' %}字幕：完整旁白与最终音频逐词时间匹配。
+          {% elif creative.get('narration_applied') %}字幕：按字数估算时间，尚未通过词级核验。
+          {% else %}字幕：使用原声分析结果。{% endif %}</p>
+        <a href="/api/tasks/{{ task.id }}/artifacts/director-plan.json">查看分镜计划与验证状态</a>
+      </section>
+      {% endif %}
 
       {% if tutorial_segments %}
       <section class="panel tutorial-segment-panel">
