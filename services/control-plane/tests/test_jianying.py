@@ -203,3 +203,69 @@ def test_fractional_contiguous_captions_remain_non_overlapping_after_microsecond
     plan = edit_plan_from_timeline(timeline, sample_plan.task_root)
 
     assert plan.texts[0].start_us + plan.texts[0].duration_us <= plan.texts[1].start_us
+
+
+def test_title_cue_becomes_large_text_segment(tmp_path, ffmpeg_fixture):
+    import shutil
+    from app.adapters.jianying import edit_plan_from_timeline
+    from app.schemas.editing import CaptionCue, EditingTimeline, TimelineClip
+
+    source = tmp_path / "clip.mp4"
+    shutil.copy2(ffmpeg_fixture, source)
+    timeline = EditingTimeline(
+        title="果知纯绿豆沙", target_duration_seconds=2, actual_duration_seconds=2,
+        clips=[TimelineClip(material_id="m", source_path=str(source), source_start_seconds=0, source_end_seconds=2,
+                            timeline_start_seconds=0, timeline_end_seconds=2, score=1, reason="hook:x", has_audio=False)],
+        captions=[
+            CaptionCue(material_id="title", text="果知纯绿豆沙", start_seconds=0, end_seconds=1.4,
+                       source_start_seconds=0, source_end_seconds=1.4, placement="middle", style="title"),
+            CaptionCue(material_id="narration", text="先来一口", start_seconds=0.3, end_seconds=2,
+                       source_start_seconds=0.3, source_end_seconds=2, placement="top"),
+        ],
+    )
+    plan = edit_plan_from_timeline(timeline, tmp_path)
+    assert [(item.text, item.size, item.track_name) for item in plan.texts] == [
+        ("果知纯绿豆沙", 15.0, "title"), ("先来一口", 10.0, "text")]
+    from app.adapters.jianying import build_draft
+    package = build_draft(plan, tmp_path / "drafts")
+    assert package.track_counts["text"] == 2
+    assert (package.draft_dir / "draft_content.json").is_file()
+
+
+def test_draft_captions_carry_partial_accent_colour_and_intro_animation(tmp_path, ffmpeg_fixture):
+    import shutil
+    from app.adapters.jianying import build_draft, edit_plan_from_timeline, emphasis_ranges_for
+
+    assert emphasis_ranges_for("整箱十瓶两百四十五克", ["两百四十五克", "十瓶", "缺席"]) == ((2, 4), (4, 10))
+    source = tmp_path / "clip.mp4"
+    shutil.copy2(ffmpeg_fixture, source)
+    timeline = EditingTimeline(
+        title="果知纯绿豆沙", target_duration_seconds=2, actual_duration_seconds=2,
+        clips=[TimelineClip(material_id="m", source_path=str(source), source_start_seconds=0, source_end_seconds=2,
+                            timeline_start_seconds=0, timeline_end_seconds=2, score=1, reason="hook:x", has_audio=False)],
+        captions=[
+            CaptionCue(material_id="title", text="果知纯绿豆沙", start_seconds=0, end_seconds=1.0,
+                       source_start_seconds=0, source_end_seconds=1.0, placement="middle", style="title"),
+            CaptionCue(material_id="narration", text="整箱十瓶两百四十五克。", start_seconds=0.2, end_seconds=2,
+                       source_start_seconds=0.2, source_end_seconds=2, placement="top", emphasis_terms=["十瓶", "两百四十五克"]),
+        ],
+    )
+    plan = edit_plan_from_timeline(timeline, tmp_path, highlight_color="FFE500")
+    assert plan.texts[1].emphasis_ranges == ((2, 4), (4, 10))
+    assert plan.texts[0].intro == "放大" and plan.texts[1].intro == "弹入"
+    assert plan.texts[1].highlight_color == pytest.approx((1.0, 0.898, 0.0), abs=0.01)
+
+    package = build_draft(plan, tmp_path / "drafts")
+    content = json.loads((package.draft_dir / "draft_content.json").read_text(encoding="utf-8"))
+    texts = {json.loads(item["content"])["text"]: json.loads(item["content"]) for item in content["materials"]["texts"]}
+    styles = texts["整箱十瓶两百四十五克"]["styles"]
+    assert [style["range"] for style in styles] == [[0, 2], [2, 4], [4, 10]]
+    colours = [style["fill"]["content"]["solid"]["color"] for style in styles]
+    assert colours[0] == [1.0, 1.0, 1.0] and colours[1] != colours[0] and colours[2] == colours[1]
+    assert all(style["bold"] and style["strokes"] for style in styles)
+    assert len(texts["果知纯绿豆沙"]["styles"]) == 1
+    animation_names = {anim["name"] for group in content["materials"]["material_animations"] for anim in group["animations"]}
+    assert {"弹入", "放大"} <= animation_names
+
+    plain = edit_plan_from_timeline(timeline, tmp_path, pop_in=False)
+    assert all(item.intro == "" for item in plain.texts)

@@ -155,3 +155,26 @@ def test_unchanged_course_timeline_fails_closed(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="course_rules_not_applied"):
         service.compare(baseline, learned, policy)
+
+
+def test_rule_digest_dedupes_balances_categories_and_cites_sources():
+    from app.models import EditingRule
+    from app.services.course_recipe_service import rule_digest
+
+    rules = []
+    for index in range(60):
+        rules.append(EditingRule(recipe_id="r", category="pacing", instruction=f"单镜头不超过{index % 3}秒",
+                                 evidence_text="e", source_asset_id="asset-aaaaaaaa-1", source_start_ms=index * 1000,
+                                 source_end_ms=index * 1000 + 500, sort_order=index))
+    rules.append(EditingRule(recipe_id="r", category="hook", instruction="开头先倒饮料", evidence_text="e",
+                             source_asset_id="asset-bbbbbbbb-2", source_start_ms=5000, source_end_ms=8000, sort_order=100))
+    rules.append(EditingRule(recipe_id="r", category="mystery", instruction="奇怪类别", evidence_text="e",
+                             source_asset_id="asset-cccccccc-3", sort_order=101))
+    digest = rule_digest(rules, max_chars=5000)
+
+    assert digest.startswith("课程规则精选：从 62 条学习规则中去重后精选 4 条")
+    assert digest.count("单镜头不超过") == 3  # 60 near-duplicates collapse to the three distinct texts
+    assert "## 开头/钩子（共 1 条，精选 1 条）" in digest
+    assert "- 开头先倒饮料（课时 asset-bb，5.0-8.0秒）" in digest
+    assert "## mystery（1 条，未精选）" in digest
+    assert len(rule_digest(rules, max_chars=150)) <= 150 and "已按长度截断" in rule_digest(rules, max_chars=150)

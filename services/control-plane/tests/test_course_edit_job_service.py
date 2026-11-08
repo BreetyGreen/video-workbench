@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.config import Settings
 from app.db import Database
@@ -381,3 +381,218 @@ def test_device_queue_and_ack_complete_server_handoff(tmp_path: Path) -> None:
     assert ack.status_code == 200
     assert ack.json()["state"] == "delivered_to_jianying"
     assert ack.json()["handoff_status"] == "imported"
+
+
+def _seed_reference(session: Session, root: Path, course: Course, *, role: CourseAssetRole = CourseAssetRole.REFERENCE) -> CourseAsset:
+    source = root / "courses" / course.id / "assets" / "reference.mp4"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"reference-cut")
+    asset = CourseAsset(
+        course_id=course.id,
+        role=role,
+        original_name="参考成片.mp4",
+        stored_path=str(source),
+        mime_type="video/mp4",
+        size_bytes=source.stat().st_size,
+        sha256="b" * 64,
+        rights_status=RightsStatus.PERSONAL_LEARNING,
+    )
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return asset
+
+
+def test_course_job_attaches_named_reference_without_making_it_editable(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        reference = _seed_reference(session, settings.data_dir, course)
+        service = CourseEditJobService(settings, FakePipeline(settings.artifact_dir), FakeHandoff())
+
+        result = service.run(
+            session,
+            course_id=course.id,
+            title="绿豆沙",
+            content_type="商品介绍",
+            commercial=False,
+            requirements_text="只用真实包装信息。",
+            reference_asset_id=reference.id,
+        )
+
+        task = result.task
+        assert task.reference_name == "参考成片.mp4"
+        assert task.reference_sha256 == "b" * 64
+        reference_path = Path(task.reference_path)
+        assert reference_path.is_file()
+        assert reference_path.name.startswith("reference-")
+        assert (settings.material_dir / task.id).resolve() in reference_path.resolve().parents
+        assert reference_path.read_bytes() == b"reference-cut"
+        # The reference is observed, never cut into the film.
+        assert len(task.materials) == 1
+        assert all(Path(item.stored_path) != reference_path for item in task.materials)
+        assert "只用真实包装信息。" in task.requirements_text
+
+
+def test_course_job_rejects_reference_that_is_not_a_course_reference_asset(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        material = next(iter(session.exec(select(CourseAsset)).all()))
+        service = CourseEditJobService(settings, FakePipeline(settings.artifact_dir), FakeHandoff())
+
+        with pytest.raises(ValueError, match="selected_reference_unavailable"):
+            service.run(
+                session,
+                course_id=course.id,
+                title="绿豆沙",
+                content_type="商品介绍",
+                commercial=False,
+                reference_asset_id=material.id,
+            )
+        with pytest.raises(ValueError, match="selected_reference_unavailable"):
+            service.run(
+                session,
+                course_id=course.id,
+                title="绿豆沙",
+                content_type="商品介绍",
+                commercial=False,
+                reference_asset_id="missing-reference",
+            )
+        # Nothing was silently attached when no reference was named.
+        result = service.run(
+            session,
+            course_id=course.id,
+            title="绿豆沙",
+            content_type="商品介绍",
+            commercial=False,
+        )
+        assert result.task.reference_path is None
+
+
+def test_course_edit_job_api_accepts_selection_requirements_and_reference(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        material = next(iter(session.exec(select(CourseAsset)).all()))
+        reference = _seed_reference(session, settings.data_dir, course)
+        course_id, material_id, reference_id = course.id, material.id, reference.id
+
+    app = create_app(
+        settings,
+        pipeline_service_override=FakePipeline(settings.artifact_dir),
+        jianying_handoff_override=FakeHandoff(),
+    )
+    with TestClient(app) as client:
+        rejected = client.post(
+            "/api/course-edit-jobs",
+            json={
+                "course_id": course_id,
+                "title": "绿豆沙",
+                "commercial": False,
+                "material_ids": [material_id],
+                "reference_asset_id": material_id,
+            },
+        )
+        assert rejected.status_code == 422
+        assert rejected.json()["detail"]["code"] == "selected_reference_unavailable"
+
+        response = client.post(
+            "/api/course-edit-jobs",
+            json={
+                "course_id": course_id,
+                "title": "绿豆沙",
+                "commercial": False,
+                "quality_profile": "production",
+                "cloud_processing_allowed": True,
+                "material_ids": [material_id],
+                "requirements_text": "只用真实包装信息。",
+                "reference_asset_id": reference_id,
+            },
+        )
+        assert response.status_code == 201, response.text
+        job = response.json()
+        task = client.get(f"/api/tasks/{job['task_id']}").json()
+
+    assert task["reference_name"] == "参考成片.mp4"
+    assert Path(task["reference_path"]).is_file()
+    assert task["cloud_processing_allowed"] is True
+    assert "只用真实包装信息。" in task["requirements_text"]
+    assert len(task["materials"]) == 1
+
+
+def test_course_job_carries_audio_material_as_music_bed_but_requires_video(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        music = settings.data_dir / "courses" / course.id / "assets" / "bed.m4a"
+        music.parent.mkdir(parents=True, exist_ok=True)
+        music.write_bytes(b"music")
+        audio = CourseAsset(
+            course_id=course.id,
+            role=CourseAssetRole.MATERIAL,
+            original_name="轻器乐.m4a",
+            stored_path=str(music),
+            mime_type="audio/mp4",
+            size_bytes=5,
+            sha256="c" * 64,
+            rights_status=RightsStatus.PERSONAL_LEARNING,
+        )
+        session.add(audio)
+        session.commit()
+        session.refresh(audio)
+        service = CourseEditJobService(settings, FakePipeline(settings.artifact_dir), FakeHandoff())
+
+        with pytest.raises(ValueError, match="personal_material_not_authorized"):
+            service.run(session, course_id=course.id, title="绿豆沙", content_type="商品介绍",
+                        commercial=False, material_ids=[audio.id])
+
+        result = service.run(session, course_id=course.id, title="绿豆沙", content_type="商品介绍", commercial=False)
+        kinds = sorted(item.mime_type for item in result.task.materials)
+        assert kinds == ["audio/mp4", "video/mp4"]
+        assert all(Path(item.stored_path).is_file() for item in result.task.materials)
+
+
+def test_large_learned_courses_hand_the_director_a_digest(tmp_path: Path) -> None:
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
+    )
+    database = Database(settings.database_url)
+    database.create_all()
+    with Session(database.engine) as session:
+        course = _seed_course(session, settings.data_dir, rights=RightsStatus.PERSONAL_LEARNING)
+        recipe = session.exec(select(EditingRecipe).where(EditingRecipe.course_id == course.id)).first()
+        asset = session.exec(select(CourseAsset)).first()
+        for index in range(60):
+            session.add(EditingRule(recipe_id=recipe.id, category="structure", instruction=f"规则{index}：配料句配配料画面",
+                                    evidence_text="e", source_asset_id=asset.id, source_start_ms=index * 1000,
+                                    source_end_ms=index * 1000 + 800, sort_order=index + 10))
+        session.commit()
+        service = CourseEditJobService(settings, FakePipeline(settings.artifact_dir), FakeHandoff())
+        result = service.run(session, course_id=course.id, title="绿豆沙", content_type="商品介绍", commercial=False)
+        text = result.task.tutorial_text
+
+    assert text.startswith("课程规则精选：从 61 条学习规则中去重后精选")
+    assert "## 结构与镜头匹配" in text and "（课时 " in text
+    assert text.count("规则") <= 30  # bounded, not the raw list

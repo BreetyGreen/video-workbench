@@ -113,6 +113,17 @@ def test_missing_api_key_reports_not_configured_without_request():
         client.analyze_tutorial({"text": "tutorial"})
 
 
+def test_tutorial_workflow_routes_optional_images_to_vision():
+    project_root = Path(__file__).resolve().parents[3]
+    payload = yaml.safe_load((project_root / 'workflows/dify/tutorial-analysis.yml').read_text(encoding='utf-8'))
+    nodes = {n['id']: n['data'] for n in payload['workflow']['graph']['nodes']}
+    images = next(v for v in nodes['start']['variables'] if v['variable'] == 'visual_frames')
+    assert images['type'] == 'file-list'
+    assert images['required'] is False
+    assert nodes['llm']['vision']['enabled'] is True
+    assert nodes['llm']['vision']['configs']['variable_selector'] == ['start', 'visual_frames']
+
+
 @pytest.mark.parametrize("filename", ["tutorial-analysis.yml", "viral-analysis.yml"])
 def test_dify_dsl_has_importable_workflow_shape(filename: str):
     project_root = Path(__file__).resolve().parents[3]

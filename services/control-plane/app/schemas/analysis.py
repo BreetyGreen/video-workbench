@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
+from app.schemas.director import DirectorPlan
 
 
 class PacingRule(BaseModel):
@@ -23,6 +24,7 @@ class QaThresholds(BaseModel):
 
 
 class EditRecipe(BaseModel):
+    director_plan: DirectorPlan | None = None
     hook_rules: list[str] = Field(min_length=1)
     target_duration_seconds: int = Field(gt=0, le=600)
     pacing: list[PacingRule] = Field(min_length=1)
@@ -31,6 +33,8 @@ class EditRecipe(BaseModel):
     audio_rules: list[str]
     prohibited_elements: list[str]
     qa_thresholds: QaThresholds
+    # Adapter-side notes about shape normalization (e.g. plan-only replies); never model claims.
+    notes: list[str] = Field(default_factory=list)
 
 
 class TrendEvidence(BaseModel):

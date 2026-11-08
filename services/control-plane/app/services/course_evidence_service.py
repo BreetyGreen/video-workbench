@@ -42,7 +42,8 @@ def write_course_evidence(session, settings, task_id, recipe, rules):
     if (settings.data_dir / "courses").resolve() not in source.parents:
         raise ValueError("tutorial_evidence_path_outside_storage")
     for suffix, name in [(".transcript.json", "tutorial-transcript.json"),
-                         (".tutorial-analysis.json", "tutorial-visual-analysis.json")]:
+                         (".tutorial-analysis.json", "tutorial-visual-analysis.json"),
+                         (".lesson-study.json", "tutorial-lesson-study.json")]:
         candidate = source.with_suffix(suffix)
         if candidate.is_file():
             shutil.copy2(candidate, target / name)

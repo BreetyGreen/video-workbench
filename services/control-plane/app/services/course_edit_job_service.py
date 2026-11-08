@@ -21,6 +21,7 @@ from app.models import (
     TaskStatus,
     VideoTask,
 )
+from app.services.course_recipe_service import rule_digest
 from app.services.task_service import create_task_from_course_assets, get_task
 
 
@@ -70,6 +71,7 @@ class CourseEditJobService:
         device_id: str | None = None,
         requirements_text: str = "",
         job_id: str | None = None,
+        reference_asset_id: str | None = None,
     ) -> CourseEditJobResult:
         course = session.get(Course, course_id)
         if course is None:
@@ -86,14 +88,16 @@ class CourseEditJobService:
         if recipe is None:
             raise ValueError("course_recipe_required")
 
-        assets = list(
-            session.exec(
+        assets = [
+            item
+            for item in session.exec(
                 select(CourseAsset)
                 .where(CourseAsset.course_id == course_id)
                 .where(CourseAsset.role == CourseAssetRole.MATERIAL)
-                .where(CourseAsset.mime_type.startswith("video/"))
             ).all()
-        )
+            # Audio material becomes the editable music bed; video material is cut.
+            if item.mime_type.startswith(("video/", "audio/"))
+        ]
         allowed_rights = (
             {RightsStatus.COMMERCIAL_AUTHORIZED}
             if commercial
@@ -105,8 +109,18 @@ class CourseEditJobService:
             if not material_ids or any(item not in available for item in material_ids):
                 raise ValueError("selected_material_unavailable_or_unlicensed")
             assets = [available[item] for item in dict.fromkeys(material_ids)]
-        if not assets:
+        if not any(item.mime_type.startswith("video/") for item in assets):
             raise ValueError("commercial_material_not_authorized" if commercial else "personal_material_not_authorized")
+        reference: CourseAsset | None = None
+        if reference_asset_id is not None:
+            reference = session.get(CourseAsset, reference_asset_id)
+            if (
+                reference is None
+                or reference.course_id != course_id
+                or reference.role != CourseAssetRole.REFERENCE
+                or not reference.mime_type.startswith("video/")
+            ):
+                raise ValueError("selected_reference_unavailable")
 
         rules = list(
             session.exec(
@@ -117,13 +131,18 @@ class CourseEditJobService:
         )
         if not rules:
             raise ValueError("course_recipe_has_no_rules")
-        tutorial_text = "\n".join(
-            f"[{rule.category}] {rule.instruction}（来源素材 {rule.source_asset_id}"
-            + (f"，第 {rule.source_page} 页" if rule.source_page else "")
-            + (f"，{rule.source_start_ms}-{rule.source_end_ms}ms" if rule.source_start_ms is not None else "")
-            + "）"
-            for rule in rules
-        )
+        if len(rules) <= 40:
+            tutorial_text = "\n".join(
+                f"[{rule.category}] {rule.instruction}（来源素材 {rule.source_asset_id}"
+                + (f"，第 {rule.source_page} 页" if rule.source_page else "")
+                + (f"，{rule.source_start_ms}-{rule.source_end_ms}ms" if rule.source_start_ms is not None else "")
+                + "）"
+                for rule in rules
+            )
+        else:
+            # A fully studied course carries hundreds of rules; hand the director a
+            # deduplicated, category-balanced digest instead of the raw list.
+            tutorial_text = rule_digest(rules)
         job = CourseEditJob(
             **({"id": job_id} if job_id else {}),
             course_id=course_id,
@@ -149,6 +168,7 @@ class CourseEditJobService:
                 quality_profile=quality_profile,
                 cloud_processing_allowed=cloud_processing_allowed,
                 course_recipe_id=recipe.id,
+                reference=reference,
             )
             job.task_id = task.id
             job.state = "rendering"

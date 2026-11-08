@@ -24,6 +24,7 @@ DOWNLOADABLE_ARTIFACTS = {
     "edit-timeline.json",
     "render-report.json",
     "quality-report.json",
+    "director-plan.json",
     "baseline-timeline.json",
     "course-rule-trace.json",
     "course-comparison.json",
@@ -54,6 +55,7 @@ class ReviewManifest(BaseModel):
     audio_route: dict[str, object] = Field(default_factory=dict)
     reference_brief: dict[str, object] | None = None
     quality_report: dict[str, object] = Field(default_factory=dict)
+    creative_validation: dict[str, object] = Field(default_factory=dict)
     timeline: list[dict[str, str | float]] = Field(default_factory=list)
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+
+import pytest
 from pathlib import Path
 
 from PIL import Image
@@ -279,3 +281,79 @@ def test_renderer_mixes_voiceover_as_independent_track(
     assert report["audio"]["voice_type"] == "zh_female_vv_uranus_bigtts"
     assert report["audio"]["original_gain_db"] == -10
     assert RenderService(settings).ffmpeg.probe_media(artifacts.preview_path).audio_streams == 1
+
+
+def test_renderer_terminates_with_long_bgm_plus_voiceover(tmp_path: Path, ffmpeg_bin: str, ffprobe_bin: str, monkeypatch):
+    """Regression: an unbounded looping bed plus a voiceover made FFmpeg spin forever."""
+    video = make_video(tmp_path / "video.mp4", ffmpeg_bin, size="320x240", color="green", with_audio=True)
+    for name, freq, seconds in (("music.wav", 220, 6), ("voiceover.wav", 440, 2)):
+        subprocess.run([ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                        f"sine=frequency={freq}:sample_rate=48000:d={seconds}", str(tmp_path / name)],
+                       check=True, capture_output=True, text=True)
+    timeline = EditingTimeline(
+        title="床+旁白", target_duration_seconds=2, actual_duration_seconds=2,
+        clips=[TimelineClip(material_id="a", source_path=str(video), source_start_seconds=0, source_end_seconds=2,
+                            timeline_start_seconds=0, timeline_end_seconds=2, score=1, reason="hook:test", has_audio=True)],
+        captions=[], cover=None,
+        audio={"mode": "narration", "original_gain_db": -22, "voiceover_path": str(tmp_path / "voiceover.wav"),
+               "bgm_path": str(tmp_path / "music.wav"), "bgm_gain_db": -15},
+    )
+    settings = Settings(data_dir=tmp_path / "data", ffmpeg_bin=ffmpeg_bin, ffprobe_bin=ffprobe_bin,
+                        render_preset="ultrafast", render_timeout_seconds=120)
+    service = RenderService(settings)
+    commands: list[list[str]] = []
+    original = service._run
+
+    def capture(command):
+        commands.append(list(command))
+        return original(command)
+
+    monkeypatch.setattr(service, "_run", capture)
+    artifacts = service.render(timeline, tmp_path / "out")
+
+    preview = service.ffmpeg.probe_media(artifacts.preview_path)
+    assert preview.audio_streams == 1 and abs(preview.duration_seconds - 2) < 0.3
+    render_command = commands[0]
+    loop_index = render_command.index("-stream_loop")
+    assert render_command[loop_index + 1] != "-1"
+    assert render_command[loop_index + 2] == "-t"
+
+
+def test_render_timeout_raises_instead_of_hanging(tmp_path: Path, monkeypatch):
+    settings = Settings(data_dir=tmp_path / "data", render_timeout_seconds=30)
+    service = RenderService(settings)
+
+    def fake_run(command, capture_output, text, timeout):
+        raise subprocess.TimeoutExpired(command, timeout)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="timed out"):
+        service._run(["ffmpeg"])
+
+
+def test_filter_graph_never_consumes_one_label_twice(tmp_path: Path):
+    """Regression: [program] fed both sidechaincompress and amix, which deadlocks FFmpeg on long inputs."""
+    import re
+
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    timeline = EditingTimeline(
+        title="graph", target_duration_seconds=3, actual_duration_seconds=3,
+        clips=[TimelineClip(material_id="a", source_path=str(video), source_start_seconds=0, source_end_seconds=3,
+                            timeline_start_seconds=0, timeline_end_seconds=3, score=1, reason="hook:x", has_audio=True)],
+        captions=[], cover=None,
+        audio={"mode": "narration", "voiceover_path": str(tmp_path / "vo.mp3"), "bgm_path": str(tmp_path / "bgm.m4a")},
+    )
+    graph, _, _ = RenderService(Settings(data_dir=tmp_path / "data"))._build_filter(timeline, tmp_path / "c.ass")
+    consumed: dict[str, int] = {}
+    produced: dict[str, int] = {}
+    for stage in graph.split(";"):
+        inputs = re.findall(r"^((?:\[[^\]]+\])+)", stage.strip())
+        outputs = re.findall(r"((?:\[[^\]]+\])+)$", stage.strip())
+        for label in re.findall(r"\[([^\]]+)\]", inputs[0] if inputs else ""):
+            consumed[label] = consumed.get(label, 0) + 1
+        for label in re.findall(r"\[([^\]]+)\]", outputs[0] if outputs else ""):
+            produced[label] = produced.get(label, 0) + 1
+    intermediate = {label for label in consumed if ":" not in label}
+    assert all(consumed[label] == 1 for label in intermediate), consumed
+    assert "asplit=2[program_mix][sidechain]" in graph

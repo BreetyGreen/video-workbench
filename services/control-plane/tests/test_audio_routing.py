@@ -134,3 +134,15 @@ def test_routing_degrades_without_tts_instead_of_blocking():
     assert decision.mode == "original"
     assert decision.voiceover_path is None
     assert decision.warning == "旁白需要生成但 TTS 不可用，已保留原始音轨继续处理。"
+
+
+def test_narration_captions_highlight_product_name_and_numbers(tmp_path: Path):
+    voice = TTSResult(path=(tmp_path / "voice.mp3").resolve(), duration_seconds=6, voice_type="longxiaochun_v2")
+    decision = AudioRoutingService().decide(
+        [analysis(segments=[])],
+        narration_text="换成这杯果知纯绿豆沙。整箱十瓶两百四十五克。",
+        voiceover=voice,
+        content_type="商品介绍",
+        product_terms=["果知纯绿豆沙"],
+    )
+    assert [cue.emphasis_terms for cue in decision.captions] == [["果知纯绿豆沙"], ["十瓶", "两百四十五克"]]

@@ -70,6 +70,62 @@ class CourseEditingPolicy:
         return next((rule for rule in self.rules if rule.category == category), None)
 
 
+DIGEST_CATEGORY_BUDGET = {
+    "hook": 18, "structure": 24, "pacing": 18, "captions": 12, "audio": 12,
+    "cta": 10, "negative": 14, "closeup": 10, "comparison": 8,
+}
+DIGEST_CATEGORY_LABEL = {
+    "hook": "开头/钩子", "structure": "结构与镜头匹配", "pacing": "节奏与切点", "captions": "字幕",
+    "audio": "旁白/音乐/音效", "cta": "结尾引导", "negative": "禁止事项", "closeup": "特写与推近", "comparison": "对比",
+}
+
+
+def _digest_key(text: str) -> str:
+    return re.sub(r"[\s，。、；：！？,.;:!?“”\"'（）()\[\]【】]", "", text).lower()[:40]
+
+
+def rule_digest(rules: list[EditingRule], *, max_chars: int = 12000,
+                budget: dict[str, int] | None = None) -> str:
+    """Bounded, cited summary of a learned course for prompts.
+
+    Full-video study can yield a thousand rules; the director only needs the
+    distinct ones. Rules are grouped by category, near-duplicates (same
+    normalized prefix) are collapsed, each category keeps a fixed budget in
+    original order, and every line carries the lesson asset id and timecode.
+    """
+    budget = budget or DIGEST_CATEGORY_BUDGET
+    grouped: dict[str, list[EditingRule]] = {}
+    seen: set[str] = set()
+    for rule in sorted(rules, key=lambda item: (item.sort_order, item.id)):
+        key = _digest_key(rule.instruction)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        grouped.setdefault(rule.category, []).append(rule)
+    lines: list[str] = []
+    total_rules = len(rules)
+    kept = 0
+    for category in budget:
+        items = grouped.get(category, [])[: budget[category]]
+        if not items:
+            continue
+        lines.append(f"## {DIGEST_CATEGORY_LABEL.get(category, category)}（共 {len(grouped.get(category, []))} 条，精选 {len(items)} 条）")
+        for rule in items:
+            timecode = ""
+            if rule.source_start_ms is not None and rule.source_end_ms is not None:
+                timecode = f"，{rule.source_start_ms / 1000:.1f}-{rule.source_end_ms / 1000:.1f}秒"
+            lines.append(f"- {rule.instruction.strip()}（课时 {rule.source_asset_id[:8]}{timecode}）")
+            kept += 1
+    for category, items in grouped.items():
+        if category not in budget and items:
+            lines.append(f"## {category}（{len(items)} 条，未精选）")
+    header = f"课程规则精选：从 {total_rules} 条学习规则中去重后精选 {kept} 条，每条附课时与时间码；未列出的规则仍在课程库中。"
+    text = header + "\n" + "\n".join(lines)
+    if len(text) > max_chars:
+        text = text[: max_chars - 20].rstrip() + "\n（已按长度截断）"
+    return text
+
+
 class CourseRecipeService:
     def compile(
         self,
