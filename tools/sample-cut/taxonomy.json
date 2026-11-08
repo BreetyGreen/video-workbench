@@ -1,0 +1,17 @@
+{
+  "_doc": "Shot types for autopilot. Codex classifies every clip into one of these (selected-takes.json keys). make_spec.py turns the flags into spec.json edit/audio lists. push_strong = action/hero shot that gets the stronger push-in; single = shown once as a still-ish shot; sfx = keep its original sound (pour, ice, cap pop, crunch); min_zoom = crop at least this much (busy backgrounds).",
+  "types": {
+    "倒水":     {"desc": "pouring the drink into a (iced) glass - the standard opening shot", "push_strong": true, "long_ok": true, "sfx": true, "min_zoom": 1.15},
+    "开盖":     {"desc": "twisting / popping the cap, tearing the pack open", "sfx": true},
+    "产品正面": {"desc": "front of the bottle/pack with the brand and product name readable", "min_zoom": 1.05},
+    "产品细节": {"desc": "close-up of label details, texture, condensation, filling", "push_strong": true},
+    "配料表":   {"desc": "ingredient list / nutrition table / back label, text readable", "no_push": true, "single": true, "long_ok": true},
+    "制作过程": {"desc": "stirring, scooping, mixing, heating, adding ice or straw", "push_strong": true, "long_ok": true, "sfx": true, "min_zoom": 1.15},
+    "成品展示": {"desc": "the finished cup/plate held up or on the table", "push_strong": true, "long_ok": true, "min_zoom": 1.15},
+    "品尝":     {"desc": "drinking or eating it (mouth/lips at the cup or food)", "push_strong": true, "sfx": true},
+    "多件陈列": {"desc": "several products, the box, the whole lineup", "min_zoom": 1.08},
+    "场景":     {"desc": "use scene: office desk, gym, sofa, fridge, outdoors"}
+  },
+  "opening": "倒水",
+  "closing_preference": ["多件陈列", "成品展示", "产品正面"]
+}

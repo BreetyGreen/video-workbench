@@ -3,13 +3,15 @@
 usage (inside the project work dir):
   python make_draft.py <render_name> <draft_title> [--cover cover.jpg] [--bgm track.mp3] [--dry-run]
 
-Tracks: graded base shots (+ native push-in keyframes), voice, action sound, subtitles, optional licensed BGM
+Tracks: graded base shots (+ native push-in keyframes), voice, action sound, subtitles in the render's caption style
+(Jianying's bundled copy of the same open font, its own intro animation, highlighted words), optional licensed BGM
 (pre-levelled ~19 dB under the voice; drag its volume in Jianying if needed). Close Jianying first.
 Draft folder / index: auto-detected per OS, or set JIANYING_DRAFT_ROOT and JIANYING_DRAFT_INDEX.
 --dry-run builds the media but writes nothing into Jianying.
 """
 import argparse
 import atexit
+import copy
 import hashlib
 import json
 import os
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import pyJianYingDraft as d
 
+import captions
 from vw_common import IS_WIN, jianying_paths, jianying_running, run, work_dir
 
 ap = argparse.ArgumentParser()
@@ -100,18 +103,14 @@ if a.bgm:
         bgm_credit = next((r["attribution"] for r in json.loads(man.read_text(encoding="utf-8"))
                            if Path(r["file"]).name == bgm_src.name), None)
 
-# ---- 3. subtitles from the render's cues ----
-cues = []
-for block in (R / "captions.srt").read_text(encoding="utf-8").strip().split("\n\n"):
-    lines = block.splitlines()
-    m = re.match(r"(\d+):(\d+):(\d+),(\d+) --> (\d+):(\d+):(\d+),(\d+)", lines[1])
-    g = [int(v) for v in m.groups()]
-    cues.append((g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000,
-                 min(g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000, total), lines[2]))
+# ---- 3. subtitles: the render's cues, style and highlighted words (captions.json) ----
+cap = json.loads((R / "captions.json").read_text(encoding="utf-8"))
+STYLE = captions.STYLES[cap["style"]]
+cues = [(c["start"], min(c["end"], total), c["text"], [tuple(x) for x in c.get("emph", [])]) for c in cap["cues"]]
 
 if a.dry_run:
     print(json.dumps({"dry_run": True, "draft_root": str(DRAFT_ROOT), "index": str(INDEX), "shots": len(shots),
-                      "subtitles": len(cues), "audio_tracks": [t[0] for t in audio_tracks],
+                      "subtitles": len(cues), "caption_style": cap["style"], "audio_tracks": [t[0] for t in audio_tracks],
                       "duration_s": round(total, 3)}, ensure_ascii=False, indent=1))
     sys.exit(0)
 
@@ -153,15 +152,62 @@ for trackname, src, vol in audio_tracks:
     adur = min(us(total), int(mat.duration))
     script.add_segment(d.AudioSegment(mat, d.Timerange(0, adur), source_timerange=d.Timerange(0, adur), volume=vol), tr)
 
-tt = script.append_track(d.TrackSpec(d.TrackType.text, "字幕（上方约20%）"))
-for k, (s, e, text) in enumerate(cues):
+def rgb(hex_color: str):
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+class RichText(d.TextSegment):
+    """Jianying stores partial colouring as one style per character range; pyJianYingDraft writes one style."""
+
+    def __init__(self, *args, ranges=(), accent=(1.0, 0.9, 0.0), **kw):
+        super().__init__(*args, **kw)
+        self._ranges, self._accent = [r for r in ranges if r[1] > r[0]], accent
+
+    def export_material(self):
+        mat = super().export_material()
+        if not self._ranges:
+            return mat
+        content = json.loads(mat["content"])
+        base = content["styles"][0]
+        bounds = sorted({0, len(self.text), *(x for r in self._ranges for x in r)})
+        styles = []
+        for a0, b0 in zip(bounds, bounds[1:]):
+            st_ = copy.deepcopy(base)
+            st_["range"] = [a0, b0]
+            if any(ra <= a0 and b0 <= rb for ra, rb in self._ranges):
+                st_["fill"]["content"]["solid"]["color"] = list(self._accent)
+            styles.append(st_)
+        content["styles"] = styles
+        mat["content"] = json.dumps(content, ensure_ascii=False)
+        return mat
+
+
+# same look as the mp4 using Jianying's bundled copies of the same open fonts and its own intro animations
+jy_font = getattr(d.FontType, STYLE.get("jianying_font", ""), None)
+jy_intro = getattr(d.TextIntro, STYLE.get("jianying_intro", ""), None)
+stroke = STYLE.get("stroke", {})
+shadow = STYLE.get("shadow")
+bg = STYLE.get("jianying_background")
+hl = STYLE.get("highlight", {})
+tt = script.append_track(d.TrackSpec(d.TrackType.text, f"字幕（{cap['style']}）"))
+for k, (s, e, text, emph) in enumerate(cues):
     s_us = us(s)
     e_us = min(us(e), us(cues[k + 1][0])) if k + 1 < len(cues) else min(us(e), us(total))
-    script.add_segment(d.TextSegment(
-        text, d.Timerange(s_us, e_us - s_us),
-        style=d.TextStyle(size=8.0, bold=True, color=(1, 1, 1), align=1, auto_wrapping=False),
-        clip_settings=d.ClipSettings(transform_y=0.6),
-        border=d.TextBorder(width=12, color=(0, 0, 0))), tt)
+    seg = RichText(
+        text, d.Timerange(s_us, e_us - s_us), font=jy_font,
+        style=d.TextStyle(size=round(STYLE["size"] / 7.8, 1), bold=STYLE.get("weight", 700) >= 700 or not jy_font,
+                          color=rgb(STYLE["fill"]), align=1, auto_wrapping=False),
+        clip_settings=d.ClipSettings(transform_y=round(1 - 2 * (STYLE["y"] + 0.025), 3)),
+        border=d.TextBorder(width=stroke.get("width", 0) * 8, color=rgb(stroke["color"])) if stroke else None,
+        background=d.TextBackground(color=bg["color"], alpha=bg.get("alpha", 1.0),
+                                    round_radius=bg.get("round_radius", 0.0)) if bg else None,
+        shadow=d.TextShadow(alpha=shadow["alpha"], color=rgb(shadow["color"]), diffuse=shadow["blur"] * 2,
+                            distance=max(1, abs(shadow["dy"]))) if shadow else None,
+        ranges=emph if hl.get("fill") and not hl.get("box") else (), accent=rgb(hl.get("fill", "#FFE500")))
+    if jy_intro is not None:
+        seg.add_animation(jy_intro, max(1, min(round(STYLE.get("anim_s", 0.14) * 2e6), e_us - s_us)))
+    script.add_segment(seg, tt)
 script.save()
 
 content = json.loads((draft_path / "draft_content.json").read_text(encoding="utf-8"))
