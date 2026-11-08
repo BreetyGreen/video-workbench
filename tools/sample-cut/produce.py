@@ -1,7 +1,7 @@
 """Autopilot final stage: everything after the judgement calls, in one command, no questions.
 
 usage (inside the project work dir, after takes/selected-takes.json, copy.json and spec.json exist):
-  python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--draft]
+  python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--bgm-lufs -22] [--draft]
                    [--narration voice/x/narration]   (reuse an approved voice instead of synthesizing)
 steps: copy_check -> voice (whole script) -> narration timing -> render -> BGM versions -> QA -> cover ->
        phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits
@@ -27,6 +27,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--voice", default=CFG.get("voice_engine", "auto"), choices=["auto", "cloud", "local"])
 ap.add_argument("--cloud-voice", default=CFG.get("cloud_voice", "longxiaochun_v2"))
 ap.add_argument("--bgm-versions", type=int, default=CFG.get("bgm_versions", 3))
+ap.add_argument("--bgm-lufs", type=float, default=CFG.get("bgm_lufs", -22.0),
+                help="BGM loudness before ducking; -22 = ~10 dB under the voice. Higher (e.g. -20) = louder music")
 ap.add_argument("--draft", action="store_true", default=CFG.get("jianying_draft", False))
 ap.add_argument("--name", default="final")
 ap.add_argument("--narration", help="reuse an existing narration dir (narration.json + narration.wav)")
@@ -132,7 +134,7 @@ if tracks and a.bgm_versions > 0:
     for m in chosen:
         t = Path(m["file"]).name
         out = R / f"{a.name}-BGM-{Path(t).stem}.mp4"
-        res = json.loads(step("add_bgm.py", final, lib / "tracks" / t, out).strip().splitlines()[-1])
+        res = json.loads(step("add_bgm.py", final, lib / "tracks" / t, out, a.bgm_lufs).strip().splitlines()[-1])
         versions.append({"title": m["title"], "file": out, "credit": m["attribution"], **res})
 else:
     print("! BGM library missing: run bgm_pick.py + bgm_download.py once; delivering without BGM")

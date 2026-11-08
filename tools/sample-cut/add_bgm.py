@@ -1,9 +1,9 @@
 """Mix a licensed BGM bed under a finished video (lesson rule: BGM ~1/10 of the voice, light instrumental).
 
-usage: python add_bgm.py <video.mp4> <bgm.mp3> <out.mp4> [bgm_lufs=-26] [skip_s=auto]
+usage: python add_bgm.py <video.mp4> <bgm.mp3> <out.mp4> [bgm_lufs=-22] [skip_s=auto]
 <bgm.mp3> may also be just a track title from the library, e.g. "Carefree"
-- BGM normalised to bgm_lufs and ducked gently (~3 dB) under speech: the bed sits ~13-14 dB under the voice while
-  someone talks. The first version (-25 with ratio-3 ducking from -28 dBFS) measured ~19-20 dB under during speech and
+- BGM normalised to bgm_lufs and ducked gently (~3 dB) under speech: at -22 the bed sits ~10 dB under the voice
+  while someone talks (user listening test on a phone: 13-14 dB under was still too quiet). The first version (-25 with ratio-3 ducking from -28 dBFS) measured ~19-20 dB under during speech and
   was inaudible on phone speakers.
 - gentle ducking while anyone speaks (sidechain on the video's own audio), 0.4 s fade in, 1.2 s fade out
 - final -14 LUFS, oversampled limiter so true peak stays < -1.5 dBTP; video stream copied untouched
@@ -24,7 +24,7 @@ if not bgm.is_file():  # allow a bare title from the library
     bgm = lib / "tracks" / (bgm.name if bgm.suffix == ".mp3" else bgm.name + ".mp3")
     if not bgm.is_file():
         raise SystemExit(f"BGM not found: {sys.argv[2]} (run bgm_pick.py + bgm_download.py first)")
-bgm_lufs = float(sys.argv[4]) if len(sys.argv) > 4 else -26.0
+bgm_lufs = float(sys.argv[4]) if len(sys.argv) > 4 else -22.0
 
 dur = probe_dur(video)
 if len(sys.argv) > 5:
