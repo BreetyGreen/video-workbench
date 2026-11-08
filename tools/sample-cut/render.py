@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-from vw_common import encode_checked, fonts_dir, has_filter, pil_font, run, subtitle_font, work_dir
+from vw_common import encode_checked, fonts_dir, has_filter, is_bold, pil_font, run, subtitle_font, work_dir
 
 WORK = work_dir()
 NARR = Path(sys.argv[1]).resolve()
@@ -228,13 +228,18 @@ def esc(p: str) -> str:  # ffmpeg filter-arg escaping for paths (drive colon, qu
 def cue_png(text: str, path: Path) -> int:
     """Draw one cue like the ASS style (bold white, black outline, top-aligned at margin_v); returns its y offset."""
     from PIL import Image, ImageDraw
-    pad = int(st["outline"]) + 4
     font = pil_font(max(12, round(st["size"] * 0.8)), bold=bool(st["bold"]))
+    # no bold face installed: embolden the glyphs with a 1 px white stroke inside a 1 px thicker black outline
+    fake = 1 if st["bold"] and not is_bold(font) else 0
+    outline = int(st["outline"]) + fake
+    pad = outline + 4
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    x0, y0, x1, y1 = probe.textbbox((0, 0), text, font=font, stroke_width=int(st["outline"]))
+    x0, y0, x1, y1 = probe.textbbox((0, 0), text, font=font, stroke_width=outline)
     img = Image.new("RGBA", (W, (y1 - y0) + 2 * pad), (0, 0, 0, 0))
-    ImageDraw.Draw(img).text(((W - (x1 - x0)) // 2 - x0, pad - y0), text, font=font, fill=(255, 255, 255, 255),
-                             stroke_width=int(st["outline"]), stroke_fill=(0, 0, 0, 255))
+    dr, xy = ImageDraw.Draw(img), ((W - (x1 - x0)) // 2 - x0, pad - y0)
+    dr.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=outline, stroke_fill=(0, 0, 0, 255))
+    if fake:
+        dr.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=fake, stroke_fill=(255, 255, 255, 255))
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
     return max(0, int(st["margin_v"]) - pad)
