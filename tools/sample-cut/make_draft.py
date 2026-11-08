@@ -5,7 +5,7 @@ usage (inside the project work dir):
 
 Tracks: graded base shots (+ native push-in keyframes), voice, action sound, subtitles in the render's caption style
 (Jianying's bundled copy of the same open font, its own intro animation, highlighted words), optional licensed BGM
-(pre-levelled ~19 dB under the voice; drag its volume in Jianying if needed). Close Jianying first.
+(pre-levelled ~8 dB under the voice; drag its volume in Jianying if needed). Close Jianying first.
 Draft folder / index: auto-detected per OS, or set JIANYING_DRAFT_ROOT and JIANYING_DRAFT_INDEX.
 --dry-run builds the media but writes nothing into Jianying.
 """
@@ -33,7 +33,7 @@ ap.add_argument("render")
 ap.add_argument("title")
 ap.add_argument("--cover")
 ap.add_argument("--bgm")
-ap.add_argument("--bgm-lufs", type=float, default=-35.0)
+ap.add_argument("--bgm-lufs", type=float, default=-24.0)  # no ducking in the draft: ~8 dB under the -16 voice
 ap.add_argument("--dry-run", action="store_true")
 a = ap.parse_args()
 

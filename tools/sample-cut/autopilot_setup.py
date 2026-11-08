@@ -29,6 +29,7 @@ cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() els
 cfg.setdefault("voice_engine", "auto")
 cfg.setdefault("cloud_voice", "longxiaochun_v2")
 cfg.setdefault("bgm_versions", 3)
+cfg.setdefault("bgm_lufs", -20.0)  # music level: -20 ≈ 8-10 dB under the voice on a phone; -18 louder, -23 quieter
 if a.cloud_voice:
     cfg["cloud_voice"] = a.cloud_voice
 if a.own_voice:
