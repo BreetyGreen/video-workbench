@@ -33,6 +33,8 @@ bash scripts/bootstrap.sh
 
 开始前建议先看：
 
+- [全新 Mac + Codex 接手本项目（从零安装到做出第一条视频）](docs/mac-codex-handoff.md)
+- [样片标准剪辑脚本：选镜头、配音、出片、BGM、剪映草稿](tools/sample-cut/README.md)
 - [Mac 用户详细操作手册：安装、课程剪辑、剪映交付、每日运行与排障](docs/macos-user-guide.md)
 - [普通用户：剪辑能力与配置完整指南](docs/capabilities-and-configuration.md)
 - [Codex：启动、诊断与配置决策指南](docs/codex-operator-guide.md)

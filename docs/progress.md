@@ -1,6 +1,29 @@
 # 全自动视频工作台进度
 
-最后更新：2026-09-09
+最后更新：2026-11-08
+
+## 2026-11-08 样片标准剪辑脚本入库，准备交给全新 Mac + Codex 使用
+
+### Confirmed
+
+- 两条样片标准成片（绿豆沙、一茶）用到的脚本已从被忽略的 `data/deliveries/*/work/` 移进 `tools/sample-cut/`。去掉了写死的 B 盘路径和 `.env` 路径，改为以当前目录为工作目录，Key 从进程环境读取；Windows 可以回退读取被忽略的 `.env`，macOS 不读。
+- 编码器、字体、剪映目录按系统自动选择。
+- BGM 工具（Incompetech CC BY 4.0，带署名清单）和本机 CosyVoice3 安装脚本（`tools/cosyvoice/install.sh`、`install.ps1`，固定上游提交 074ca6d）一起入库。
+- 修复了 `make_sheets.py` 缩略图全部为空的问题：旋转的手机素材缩放后比画布宽 1 像素，导致 pad 失败，而且错误被吞掉了。现在先裁剪再 pad，失败会报出来。
+- 修复了 ffmpeg 自带 aac 编码器真峰值冲到 +3..+4 dBTP 的问题（明亮 BGM 上即使有 -2 dB 限幅器也会超）。现在先用系统编码器（aac_mf / aac_at），编码后重测真峰值，超过 -1 dBTP 就拒绝交付。
+- `services/control-plane` 补上了 `dashscope==1.27.5` 依赖。此前 `dashscope_speech.py` 会导入它，但 pyproject 没有列出，全新克隆后云端配音会失败。
+- Windows 回归测试：
+  - 新脚本重渲一茶，结果和旧版一致：23 镜头，25.47 秒，aac_mf，-2.0 dBTP。
+  - 缩略图拼板：48 张、404 条素材、0 个错误。
+  - add_bgm 输出 -3.7 dBTP。
+  - make_draft `--dry-run` 通过。
+  - CosyVoice 安装脚本重复运行，冒烟测试通过（RTF 13.5）。
+  - control-plane 全量测试 461 passed。
+- 新增 `docs/mac-codex-handoff.md`（给拿到仓库的新人），并在 AGENTS.md 里加了样片剪辑入口和安全规则。
+
+### Open
+
+- macOS 真机尚未验证：aac_at 编码后的真峰值、PingFang 字幕显示、Mac 剪映导入 pyJianYingDraft 草稿、CosyVoice 在 Apple Silicon 上的安装和速度。
 
 ## 2026-09-14 字幕“花字”：关键词高亮 + 弹入 + 片头发光
 
