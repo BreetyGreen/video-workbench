@@ -3,6 +3,7 @@
 # Idempotent: re-run to resume. Needs ~8 GB free (5 GB model + Python env), network, and uv (scripts/bootstrap.sh installs it).
 #   COSYVOICE_HOME   install dir (default ~/Library/Application Support/VideoWorkbench/CosyVoice)
 #   VIDEO_WORKBENCH_PIP_MIRROR  e.g. https://mirrors.aliyun.com/pypi/simple/ when PyPI is slow
+#   COSYVOICE_MODEL_SOURCE      modelscope (default, fast in China) | huggingface (fast outside China)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,11 +35,18 @@ uv pip install --python .venv/bin/python ${INDEX_ARGS[@]+"${INDEX_ARGS[@]}"} -r 
   --build-constraints "$HERE/build-constraints.txt"
 uv pip install --python .venv/bin/python ${INDEX_ARGS[@]+"${INDEX_ARGS[@]}"} setuptools==69.5.1   # runtime needs pkg_resources
 
-echo "== 3/4 model Fun-CosyVoice3-0.5B from ModelScope (~5 GB, resumable)"
-.venv/bin/python - <<'PY'
-from modelscope import snapshot_download
-snapshot_download("FunAudioLLM/Fun-CosyVoice3-0.5B-2512", local_dir="pretrained_models/Fun-CosyVoice3-0.5B",
-                  ignore_file_pattern=["llm.rl.pt", "flow.decoder.estimator.fp32.onnx", "speech_tokenizer_v3.batch.onnx"])
+SOURCE="${COSYVOICE_MODEL_SOURCE:-modelscope}"   # modelscope (fast in China) | huggingface (fast elsewhere)
+echo "== 3/4 model Fun-CosyVoice3-0.5B from $SOURCE (~5 GB, resumable)"
+COSYVOICE_MODEL_SOURCE="$SOURCE" .venv/bin/python - <<'PY'
+import os
+skip = ["llm.rl.pt", "flow.decoder.estimator.fp32.onnx", "speech_tokenizer_v3.batch.onnx"]
+dst = "pretrained_models/Fun-CosyVoice3-0.5B"
+if os.environ["COSYVOICE_MODEL_SOURCE"] == "huggingface":
+    from huggingface_hub import snapshot_download
+    snapshot_download("FunAudioLLM/Fun-CosyVoice3-0.5B-2512", local_dir=dst, ignore_patterns=skip)
+else:
+    from modelscope import snapshot_download
+    snapshot_download("FunAudioLLM/Fun-CosyVoice3-0.5B-2512", local_dir=dst, ignore_file_pattern=skip)
 print("model ok")
 PY
 
