@@ -9,6 +9,8 @@ on:
       - "tools/cosyvoice/**"
       - "tools/sample-cut/mac_acceptance.py"
       - "tools/sample-cut/produce.py"
+      - "tools/sample-cut/narration_from_whole.py"
+      - "tools/sample-cut/vw_common.py"
       - ".github/workflows/mac-acceptance.yml"
 
 permissions:

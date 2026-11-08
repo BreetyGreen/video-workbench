@@ -69,7 +69,10 @@ def probe_dur(p) -> float:
 # ---------- DashScope key (cloud TTS / ASR) ----------
 
 def dashscope_key() -> str:
-    """Process env first. Windows may fall back to the ignored repo .env; macOS never reads .env (AGENTS.md)."""
+    """Process env first. Windows may fall back to the ignored repo .env; macOS never reads .env (AGENTS.md).
+    VIDEO_WORKBENCH_OFFLINE=1 forces the no-key path (tests, or to keep everything on the machine)."""
+    if os.environ.get("VIDEO_WORKBENCH_OFFLINE") == "1":
+        raise SystemExit("VIDEO_WORKBENCH_OFFLINE=1: cloud voice/ASR disabled")
     for k in ("VIDEO_WORKBENCH_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"):
         if os.environ.get(k):
             return os.environ[k]
