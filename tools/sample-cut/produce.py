@@ -1,7 +1,7 @@
 """Autopilot final stage: everything after the judgement calls, in one command, no questions.
 
 usage (inside the project work dir, after takes/selected-takes.json, copy.json and spec.json exist):
-  python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--bgm-lufs -22] [--draft]
+  python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--bgm-lufs -20] [--draft]
                    [--narration voice/x/narration]   (reuse an approved voice instead of synthesizing)
 steps: copy_check -> voice (whole script) -> narration timing -> render -> BGM versions -> QA -> cover ->
        phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits
@@ -27,8 +27,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--voice", default=CFG.get("voice_engine", "auto"), choices=["auto", "cloud", "local"])
 ap.add_argument("--cloud-voice", default=CFG.get("cloud_voice", "longxiaochun_v2"))
 ap.add_argument("--bgm-versions", type=int, default=CFG.get("bgm_versions", 3))
-ap.add_argument("--bgm-lufs", type=float, default=CFG.get("bgm_lufs", -22.0),
-                help="BGM loudness before ducking; -22 = ~10 dB under the voice. Higher (e.g. -20) = louder music")
+ap.add_argument("--bgm-lufs", type=float, default=CFG.get("bgm_lufs", -20.0),
+                help="BGM loudness before ducking; -20 = ~8-10 dB under the voice on a phone. Higher = louder music")
 ap.add_argument("--draft", action="store_true", default=CFG.get("jianying_draft", False))
 ap.add_argument("--name", default="final")
 ap.add_argument("--narration", help="reuse an existing narration dir (narration.json + narration.wav)")
@@ -115,7 +115,12 @@ final = R / f"{a.name}.mp4"
 # ---------- BGM: pick tracks by the product's mood, mix N versions ----------
 lib = Path(os.environ.get("VIDEO_WORKBENCH_BGM_DIR") or data_home() / "bgm-library" / "incompetech")
 manifest = json.loads((lib / "manifest.json").read_text(encoding="utf-8")) if (lib / "manifest.json").is_file() else []
+if manifest:  # score tracks by phone-audible share once; skip bass-only grooves that vanish on phone speakers
+    import bgm_analyze
+    manifest = bgm_analyze.analyze()
 tracks = [m for m in manifest if (lib / "tracks" / Path(m["file"]).name).is_file()]
+audible = [m for m in tracks if m.get("phone_db", 0) >= -6.0]
+tracks = audible if len(audible) >= 3 else tracks
 versions = []
 if tracks and a.bgm_versions > 0:
     sys.path.insert(0, str(HERE))
@@ -127,7 +132,8 @@ if tracks and a.bgm_versions > 0:
             "零食": ["Happy", "Bouncy", "Funky", "Playful"], "辣味": ["Funky", "Groovy", "Bouncy"],
             "母婴": ["Playful", "Light", "Happy"], "日用": ["Bright", "Uplifting", "Light"]}
     words = [w for m in moods for w in want.get(m, [])] or ["Bright", "Happy", "Uplifting"]
-    score = lambda m: sum(w.lower() in (m.get("feel") or "").lower() for w in words) * 10 + m.get("score", 0)
+    score = lambda m: (sum(w.lower() in (m.get("feel") or "").lower() for w in words) * 10 + m.get("score", 0)
+                       + 2 * m.get("phone_db", -6))  # prefer melody that a phone speaker can play
     ranked = sorted(tracks, key=lambda m: (-score(m), m["title"]))
     seed = sum(map(ord, copy.get("product", ""))) % max(1, min(6, len(ranked)))
     chosen = (ranked[seed:] + ranked[:seed])[:a.bgm_versions]  # different products get different tracks
