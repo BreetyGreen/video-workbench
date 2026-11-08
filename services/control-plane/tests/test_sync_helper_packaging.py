@@ -34,7 +34,7 @@ def test_sync_helper_has_pinned_cross_platform_build_and_install_contracts() -> 
     assert '"$INSTALL" --server-url' in macos
     assert 'SOURCE="$ROOT/VideoWorkbenchSync"' in macos
     assert "RunAtLoad" in plist and "KeepAlive" in plist
-    assert "windows-latest" in workflow and "macos-14" in workflow
+    assert "windows-latest" in workflow and "macos-15" in workflow
     assert "VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN" not in workflow
     assert "${{ github.token }}" in workflow
     assert "actions/download-artifact@v4" in workflow

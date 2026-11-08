@@ -331,7 +331,7 @@ python scripts/sync-jianying-device.py \
 
 持续监听时追加 `--watch`。首次运行会无回显地要求一次性配对码；Windows 用当前用户 DPAPI 加密保存设备令牌，macOS 保存到权限为 `0600` 的用户目录文件。也可以从本机环境变量 `VIDEO_WORKBENCH_DEVICE_BEARER_TOKEN` 提供令牌。令牌不会写进命令行和仓库。
 
-当前仓库已经完成原子单次配对、令牌哈希存储、作业到设备的原子认领与隔离、下载、导入、剪映启动、幂等结果回报、退避重试、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-14` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
+当前仓库已经完成原子单次配对、令牌哈希存储、作业到设备的原子认领与隔离、下载、导入、剪映启动、幂等结果回报、退避重试、Windows/macOS 单文件构建和登录自启脚本。Windows 打包产物已在真实机器完成“发现剪映、确认草稿目录可写、请求空队列并正常退出”烟测；macOS 构建由 `macos-15` CI 执行，本机 Windows 无法替代 Mac 做 Gatekeeper 与剪映实机验收。公开分发仍需要维护者提供 Windows 代码签名证书和 Apple Developer ID/公证凭据。
 
 Windows 安装脚本默认写入当前用户的 `%LOCALAPPDATA%`。它不会自动选择 `B:` 或其他盘符；若用户希望把程序或同步数据放在其他磁盘，可显式传入 `-InstallDir`、`-DataDir`，该选择只属于当前设备。macOS 数据仍存放在用户的 `~/Library/Application Support/VideoWorkbench`。
 
