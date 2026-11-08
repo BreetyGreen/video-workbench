@@ -1,0 +1,105 @@
+{
+  "_doc": "Caption style library. size = font em in px on a 1080x1920 canvas; y = top of the caption line as a fraction of height (Douyin covers the bottom ~25% and the right edge with UI, so captions stay in the upper third or just above the middle). anim: pop | rise | fade | none. highlight = the 1-2 emphasis words per cue. jianying_* map the same look onto Jianying's own bundled fonts and intro animations for the draft. Fonts are all SIL OFL 1.1 (fonts_download.py).",
+  "styles": {
+    "经典带货": {
+      "moods": ["通用", "饮品", "零食", "日用"],
+      "font": "noto-sans-sc", "weight": 900, "size": 66, "fill": "#FFFFFF",
+      "stroke": {"color": "#000000", "width": 6},
+      "shadow": {"color": "#000000", "alpha": 0.45, "dx": 0, "dy": 4, "blur": 5},
+      "highlight": {"fill": "#FFE500", "scale": 1.18},
+      "y": 0.19, "anim": "pop", "anim_s": 0.14,
+      "jianying_font": "SourceHanSansCN_Bold", "jianying_intro": "弹入"
+    },
+    "得意黑活力": {
+      "moods": ["饮品", "运动", "数码", "年轻"],
+      "font": "smiley-sans", "size": 72, "fill": "#FFFFFF",
+      "stroke": {"color": "#10213F", "width": 6},
+      "shadow": {"color": "#000000", "alpha": 0.35, "dx": 3, "dy": 5, "blur": 4},
+      "highlight": {"fill": "#FF8A1F", "scale": 1.15},
+      "y": 0.2, "anim": "rise", "anim_s": 0.16,
+      "jianying_font": "得意黑", "jianying_intro": "向上滑动"
+    },
+    "快乐体可爱": {
+      "moods": ["甜品", "零食", "母婴", "可爱"],
+      "font": "zcool-kuaile", "size": 70, "fill": "#FFFFFF",
+      "stroke": {"color": "#FF4F86", "width": 7},
+      "shadow": {"color": "#7A0030", "alpha": 0.35, "dx": 0, "dy": 4, "blur": 3},
+      "highlight": {"fill": "#FFF15A", "scale": 1.2},
+      "y": 0.2, "anim": "pop", "anim_s": 0.16,
+      "jianying_font": "快乐体", "jianying_intro": "弹入"
+    },
+    "黄油大字报": {
+      "moods": ["零食", "促销", "辣味", "热闹"],
+      "font": "zcool-huangyou", "size": 78, "fill": "#FFE600",
+      "stroke": {"color": "#111111", "width": 8},
+      "outer_stroke": {"color": "#FFFFFF", "width": 4},
+      "shadow": {"color": "#000000", "alpha": 0.5, "dx": 0, "dy": 6, "blur": 2},
+      "highlight": {"fill": "#FF3B30", "scale": 1.12},
+      "y": 0.18, "anim": "pop", "anim_s": 0.12,
+      "jianying_font": "黄油体", "jianying_intro": "放大"
+    },
+    "清爽底框": {
+      "moods": ["饮品", "茶", "健康", "清爽"],
+      "font": "noto-sans-sc", "weight": 700, "size": 58, "fill": "#FFFFFF",
+      "box": {"color": "#000000", "alpha": 0.5, "pad_x": 26, "pad_y": 12, "radius": 22},
+      "highlight": {"fill": "#6CF5CF", "scale": 1.0},
+      "y": 0.2, "anim": "fade", "anim_s": 0.14,
+      "jianying_font": "SourceHanSansCN_Bold", "jianying_intro": "渐显",
+      "jianying_background": {"color": "#000000", "alpha": 0.5, "round_radius": 0.3}
+    },
+    "文楷温柔": {
+      "moods": ["茶", "烘焙", "居家", "温柔"],
+      "font": "lxgw-wenkai", "size": 64, "fill": "#FFFFFF",
+      "stroke": {"color": "#3B2A1E", "width": 4},
+      "shadow": {"color": "#000000", "alpha": 0.4, "dx": 0, "dy": 3, "blur": 6},
+      "highlight": {"fill": "#FFD27A", "scale": 1.08},
+      "y": 0.2, "anim": "fade", "anim_s": 0.2,
+      "jianying_font": "小薇体", "jianying_intro": "渐显"
+    },
+    "小薇雅致": {
+      "moods": ["茶", "花", "高端", "雅致"],
+      "font": "zcool-xiaowei", "size": 66, "fill": "#FFFFFF",
+      "stroke": {"color": "#1E2A24", "width": 4},
+      "shadow": {"color": "#000000", "alpha": 0.4, "dx": 0, "dy": 3, "blur": 6},
+      "highlight": {"fill": "#E8C27A", "scale": 1.1},
+      "y": 0.2, "anim": "rise", "anim_s": 0.2,
+      "jianying_font": "小薇体", "jianying_intro": "向上滑动"
+    },
+    "综艺双描边": {
+      "moods": ["零食", "饮品", "热闹", "年轻"],
+      "font": "noto-sans-sc", "weight": 900, "size": 68, "fill": "#FFFFFF",
+      "stroke": {"color": "#111111", "width": 6},
+      "outer_stroke": {"color": "#FFD400", "width": 6},
+      "highlight": {"fill": "#3DF5FF", "scale": 1.16},
+      "y": 0.19, "anim": "pop", "anim_s": 0.12,
+      "jianying_font": "SourceHanSansCN_Bold", "jianying_intro": "弹入"
+    },
+    "高亮底条": {
+      "moods": ["通用", "日用", "数码", "促销"],
+      "font": "noto-sans-sc", "weight": 800, "size": 62, "fill": "#FFFFFF",
+      "stroke": {"color": "#000000", "width": 5},
+      "highlight": {"fill": "#111111", "scale": 1.0, "box": {"color": "#FFE500", "pad_x": 8, "pad_y": 4, "radius": 8}},
+      "y": 0.2, "anim": "pop", "anim_s": 0.14,
+      "jianying_font": "SourceHanSansCN_Bold", "jianying_intro": "弹入"
+    },
+    "极简白字": {
+      "moods": ["通用", "高端", "茶", "日用"],
+      "font": "noto-sans-sc", "weight": 700, "size": 60, "fill": "#FFFFFF",
+      "stroke": {"color": "#000000", "width": 3},
+      "shadow": {"color": "#000000", "alpha": 0.55, "dx": 0, "dy": 3, "blur": 8},
+      "highlight": {"fill": "#FFF3B0", "scale": 1.0},
+      "y": 0.2, "anim": "fade", "anim_s": 0.12,
+      "jianying_font": "SourceHanSansCN_Bold", "jianying_intro": "渐显"
+    }
+  },
+  "mood_keywords": {
+    "茶": ["茶", "白牡丹", "乌龙", "茉莉", "普洱", "红茶", "绿茶"],
+    "饮品": ["饮", "水", "汁", "沙", "奶", "咖啡", "气泡", "苏打", "可乐"],
+    "甜品": ["蛋挞", "蛋糕", "甜", "布丁", "冰淇淋", "雪糕", "奶茶", "巧克力"],
+    "零食": ["零食", "薯", "饼干", "坚果", "辣条", "肉干", "糖"],
+    "辣味": ["辣", "麻", "火锅"],
+    "健康": ["无糖", "0糖", "零糖", "低脂", "高蛋白", "膳食纤维"],
+    "母婴": ["宝宝", "婴", "儿童"],
+    "日用": ["纸", "洗", "牙", "毛巾", "收纳"]
+  }
+}

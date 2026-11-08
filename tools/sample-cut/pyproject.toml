@@ -8,6 +8,8 @@ dependencies = [
   "numpy==2.4.6",
   "pillow==12.3.0",
   "pyJianYingDraft==0.3.0",
+  "rapidocr==3.9.2",
+  "onnxruntime==1.29.0",
 ]
 
 [tool.uv]

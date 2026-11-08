@@ -2,17 +2,17 @@
 
 usage (inside the project work dir): python render.py <narration_dir> <out_name>
 inputs: copy.json (units -> shot folders), takes/selected-takes.json, <narration_dir>/narration.json + narration.wav, spec.json
-output: renders/<out_name>/<out_name>.mp4 (+ edit-plan.json, captions.srt/.ass, voice_norm.wav, sfx.wav for make_draft.py)
-env: COPY=<other copy file>
+output: renders/<out_name>/<out_name>.mp4 (+ edit-plan.json, captions.json/.srt, voice_norm.wav, sfx.wav for make_draft.py)
+env: COPY=<other copy file>, CAPTION_STYLE=<name in styles.json> (else copy.json "style", spec subtitle.style, auto)
 """
 import json
-import math
 import os
 import re
 import sys
 from pathlib import Path
 
-from vw_common import encode_checked, fonts_dir, has_filter, is_bold, pil_font, run, subtitle_font, work_dir
+import captions
+from vw_common import encode_checked, run, work_dir
 
 WORK = work_dir()
 NARR = Path(sys.argv[1]).resolve()
@@ -149,52 +149,32 @@ run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(OUT 
 sfxbed = OUT / "sfx.wav"
 run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(OUT / "s.txt"), "-c", "pcm_s16le", str(sfxbed)])
 
-# ---------- 4. subtitles (ASS) ----------
+# ---------- 4. captions: style library, keyword highlight, intro animation (captions.py) ----------
 st = SPEC["subtitle"]
-
-
-def ass_time(x):
-    cs = int(round(x * 100))
-    return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
-
-
-cues = []
-for u in units:
-    parts = [x for x in re.split(r"[，。！？、,!?]", u["text"]) if x.strip()]
-    # merge or split to keep each cue within max chars
-    chunks = []
-    for x in parts:
-        while len(x) > st["max_chars"]:
-            cut = math.ceil(len(x) / math.ceil(len(x) / st["max_chars"]))
-            chunks.append(x[:cut])
-            x = x[cut:]
-        chunks.append(x)
-    total_c = sum(len(c) for c in chunks)
-    t = u["start"]
-    for c in chunks:
-        d = (u["end"] - u["start"]) * len(c) / total_c
-        cues.append((t, t + d, c))
-        t += d
-# hold each cue until the next one starts (no flicker in short gaps); last ends with the video
 end_all = total_frames / FPS
-cues = [(s, (cues[i + 1][0] if i + 1 < len(cues) else min(e + 0.3, end_all - 0.05)), c) for i, (s, e, c) in enumerate(cues)]
-ass = [
-    "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {W}", f"PlayResY: {H}", "WrapStyle: 2", "",
-    "[V4+ Styles]",
-    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
-    "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    f"Style: Main,{subtitle_font(st['font'])},{st['size']},{st['primary']},&H000000FF,{st['outline_colour']},{st['back_colour']},"
-    f"{-1 if st['bold'] else 0},0,0,0,100,100,{st['spacing']},0,1,{st['outline']},{st['shadow']},8,60,60,{st['margin_v']},1",
-    "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-]
-for s, e, c in cues:
-    ass.append(f"Dialogue: 0,{ass_time(s)},{ass_time(e)},Main,,0,0,0,,{c}")
-(OUT / "captions.ass").write_text("\n".join(ass) + "\n", encoding="utf-8-sig")
+STYLE_NAME = captions.pick_style(COPY.get("product", ""), " ".join(x["text"] for x in COPY["sentences"]),
+                                 os.environ.get("CAPTION_STYLE") or COPY.get("style") or st.get("style"))
+STYLE = captions.STYLES[STYLE_NAME]
+_pterms = captions.product_terms(COPY.get("product", "")) + [SPEC.get("cover", {}).get("title", "")]
+
+
+def _emph(u):  # Codex may list emphasis words per sentence; otherwise pick them deterministically
+    given = COPY["sentences"][u["i"]].get("emphasis")
+    return [w for w in given if w in u["text"]] if given else captions.emphasis_terms(u["text"], _pterms)
+
+
+cues = captions.build_cues(units, captions.max_chars_for(STYLE, st.get("max_chars", 15)), end_all, _emph)
+(OUT / "captions.json").write_text(json.dumps({"style": STYLE_NAME, "cues": cues}, ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
 srt = []
-for i, (s, e, c) in enumerate(cues, 1):
+for i, c in enumerate(cues, 1):
     f = lambda x: f"{int(x // 3600):02d}:{int(x // 60 % 60):02d}:{int(x % 60):02d},{int(round(x % 1 * 1000)) % 1000:03d}"
-    srt += [str(i), f"{f(s)} --> {f(e)}", c, ""]
+    srt += [str(i), f"{f(c['start'])} --> {f(c['end'])}", c["text"], ""]
 (OUT / "captions.srt").write_text("\n".join(srt), encoding="utf-8")
+cap_list, cap_y = captions.render_layer(cues, STYLE, end_all, FPS, OUT / "caption-frames")
+(OUT / "render-info.json").write_text(json.dumps({"narration_dir": str(NARR), "caption_style": STYLE_NAME,
+                                                "copy": os.environ.get("COPY", "copy.json")}, ensure_ascii=False),
+                                    encoding="utf-8")
 
 # ---------- 5. mix: voice + gated original action sound (+ optional BGM) ----------
 mix = SPEC["audio"]
@@ -221,51 +201,13 @@ fc += (f"[m]loudnorm=I={mix['target_lufs']}:TP=-1.5:LRA=11,aresample=192000,"
        f"alimiter=limit=0.79:level=false:attack=1:release=50,aresample=48000,atrim=0:{end_all:.3f}[a]")
 
 
-def esc(p: str) -> str:  # ffmpeg filter-arg escaping for paths (drive colon, quotes)
-    return p.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-
-
-def cue_png(text: str, path: Path) -> int:
-    """Draw one cue like the ASS style (bold white, black outline, top-aligned at margin_v); returns its y offset."""
-    from PIL import Image, ImageDraw
-    font = pil_font(max(12, round(st["size"] * 0.8)), bold=bool(st["bold"]))
-    # no bold face installed: embolden the glyphs with a 1 px white stroke inside a 1 px thicker black outline
-    fake = 1 if st["bold"] and not is_bold(font) else 0
-    outline = int(st["outline"]) + fake
-    pad = outline + 4
-    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    x0, y0, x1, y1 = probe.textbbox((0, 0), text, font=font, stroke_width=outline)
-    img = Image.new("RGBA", (W, (y1 - y0) + 2 * pad), (0, 0, 0, 0))
-    dr, xy = ImageDraw.Draw(img), ((W - (x1 - x0)) // 2 - x0, pad - y0)
-    dr.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=outline, stroke_fill=(0, 0, 0, 255))
-    if fake:
-        dr.text(xy, text, font=font, fill=(255, 255, 255, 255), stroke_width=fake, stroke_fill=(255, 255, 255, 255))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(path)
-    return max(0, int(st["margin_v"]) - pad)
-
-
 n_in = inputs.count("-i")
-if has_filter("ass") and not os.environ.get("SAMPLE_CUT_PNG_SUBS"):
-    sub_mode = "libass"
-    fdir = fonts_dir()
-    vchain = (f"[0:v]ass='{esc((OUT / 'captions.ass').as_posix())}'" + (f":fontsdir='{esc(fdir)}'" if fdir else "")
-              + "[vo]")
-else:  # ffmpeg built without libass (Homebrew's default formula): Pillow-drawn cues overlaid in their time windows
-    sub_mode = "pillow-overlay"
-    parts, last = [], "0:v"
-    for k, (s, e, c) in enumerate(cues):
-        png = OUT / "subs" / f"cue{k:02d}.png"
-        y = cue_png(c, png)
-        inputs += ["-i", str(png)]
-        lab = "vo" if k == len(cues) - 1 else f"o{k}"
-        parts.append(f"[{last}][{n_in + k}:v]overlay=0:{y}:enable='between(t,{s:.3f},{e:.3f})'[{lab}]")
-        last = lab
-    vchain = ";".join(parts) if parts else "[0:v]null[vo]"
+inputs += ["-f", "concat", "-safe", "0", "-i", str(cap_list)]
+vchain = f"[{n_in}:v]fps={FPS},format=rgba[cap];[0:v][cap]overlay=0:{cap_y}:format=auto:eof_action=pass[vo]"
 final = OUT / f"{NAME}.mp4"
 enc = encode_checked(lambda a: ["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", fc + ";" + vchain,
                                 "-map", "[vo]", "-map", "[a]", "-c:v", "libx264", "-preset", "slow", "-crf", "18",
                                 "-profile:v", "high", "-pix_fmt", "yuv420p", *a, "-ar", "48000",
                                 "-movflags", "+faststart", "-t", f"{end_all:.3f}", str(final)], final, bitrate="192k")
 print(json.dumps({"final": str(final), "duration": round(end_all, 3), "shots": len(plan),
-                  "avg_shot_s": round(end_all / len(plan), 2), "cues": len(cues), "subtitles": sub_mode, **enc}, ensure_ascii=False))
+                  "avg_shot_s": round(end_all / len(plan), 2), "cues": len(cues), "caption_style": STYLE_NAME, **enc}, ensure_ascii=False))

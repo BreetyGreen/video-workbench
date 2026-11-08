@@ -37,12 +37,13 @@ jobs:
             services/control-plane/tests/test_sync_helper_packaging.py -q
           bash -n scripts/bootstrap.sh scripts/start-local.sh scripts/stop-local.sh
           python3 scripts/verify-fresh-clone.py --dry-run
-      - name: Sample-cut smoke test (synthetic media, aac_at, PingFang subtitles)
+      - name: Sample-cut smoke test (synthetic media, aac_at, OFL caption fonts, QA)
         run: |
           command -v ffmpeg >/dev/null || brew install ffmpeg
           ffmpeg -hide_banner -filters | grep -E " (ass|subtitles) " || echo "ffmpeg has no libass: render.py uses the Pillow subtitle fallback"
           "$HOME/.local/bin/uv" sync --project tools/sample-cut --python 3.12 --locked
           bash -n tools/cosyvoice/install.sh
+          "$HOME/.local/bin/uv" run --project tools/sample-cut python tools/sample-cut/fonts_download.py
           "$HOME/.local/bin/uv" run --project tools/sample-cut python tools/sample-cut/smoke_test.py "$RUNNER_TEMP/sample-cut-smoke"
       - name: Upload smoke frame
         if: always()
