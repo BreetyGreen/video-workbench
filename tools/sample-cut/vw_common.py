@@ -140,16 +140,56 @@ def fonts_dir() -> str | None:
     return None
 
 
-def pil_font(size: int, bold: bool = False):
+BOLD_STYLES = ("heavy", "black", "bold", "semibold", "demibold", "w6", "w7", "w8", "medium")
+
+
+def is_bold(font) -> bool:
+    try:
+        return any(b in font.getname()[1].lower() for b in BOLD_STYLES[:-1])
+    except Exception:
+        return False
+
+
+def _faces(path: Path, size: int):
+    """All faces of a font file; .ttc collections (PingFang, Hiragino) hold several weights."""
     from PIL import ImageFont
-    cands = (["msyhbd.ttc", "msyh.ttc", "arialbd.ttf", "arial.ttf"] if bold else ["msyh.ttc", "arial.ttf"]) if IS_WIN else [
-        "/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/Hiragino Sans GB.ttc",
-        "/System/Library/Fonts/STHeiti Medium.ttc", "/System/Library/Fonts/Helvetica.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
-    for c in cands:
-        p = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / c if IS_WIN else Path(c)
-        if p.is_file():
-            return ImageFont.truetype(str(p), size)
+    for i in range(64):
+        try:
+            f = ImageFont.truetype(str(path), size, index=i)
+        except OSError:
+            return
+        yield f
+        if path.suffix.lower() != ".ttc":
+            return
+
+
+def pil_font(size: int, bold: bool = False):
+    """CJK-capable font for Pillow. With bold=True pick the boldest Simplified-Chinese face a collection offers
+    (index 0 of PingFang.ttc / Hiragino Sans GB.ttc is a regular weight)."""
+    from PIL import ImageFont
+    if IS_WIN:
+        names = ["msyhbd.ttc", "msyh.ttc", "arialbd.ttf", "arial.ttf"] if bold else ["msyh.ttc", "arial.ttf"]
+        paths = [Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / n for n in names]
+    else:
+        paths = [Path(c) for c in ("/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/Hiragino Sans GB.ttc",
+                                   "/System/Library/Fonts/STHeiti Medium.ttc", "/System/Library/Fonts/Helvetica.ttc",
+                                   "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+                                   "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                                   "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")]
+    for p in paths:
+        if not p.is_file():
+            continue
+        faces = list(_faces(p, size))
+        if not faces:
+            continue
+
+        def score(f):
+            fam, style = (x.lower() for x in f.getname())
+            weight = next((len(BOLD_STYLES) - k for k, b in enumerate(BOLD_STYLES) if b in style), 0)
+            sc = 2 if (" sc" in fam or "gb" in fam or "yahei" in fam) else 0
+            return (weight if bold else -weight) * 3 + sc
+
+        return max(faces, key=score)
     return ImageFont.load_default(size)
 
 

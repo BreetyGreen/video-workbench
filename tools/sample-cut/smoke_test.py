@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from vw_common import IS_MAC, IS_WIN, integrated_lufs, run, true_peak  # noqa: E402
+from vw_common import IS_MAC, IS_WIN, integrated_lufs, is_bold, pil_font, run, true_peak  # noqa: E402
 
 out_dir = Path(sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="sample-cut-smoke-")).resolve()
 work = out_dir / "work"
@@ -107,8 +107,11 @@ def band_bytes(src):
 a, b = band_bytes(final), band_bytes(work / "renders" / "smoke" / "picture.mp4")
 diff = sum(abs(x - y) for x, y in zip(a, b)) / max(1, len(a))
 checks["subtitle_drawn"] = diff > 3.0
+sub_font = pil_font(48, bold=True)
+if res["subtitles"] == "pillow-overlay" and (IS_MAC or IS_WIN):
+    checks["subtitle_font_bold"] = is_bold(sub_font)  # the sample standard wants bold captions
 print(json.dumps({"subtitles": res["subtitles"], "encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
-                  "subtitle_band_diff": round(diff, 2), "frame": str(frame), "checks": checks}, ensure_ascii=False, indent=1))
+                  "subtitle_band_diff": round(diff, 2), "pillow_font": list(sub_font.getname()), "frame": str(frame), "checks": checks}, ensure_ascii=False, indent=1))
 if not all(checks.values()):
     raise SystemExit("smoke test FAILED: " + ", ".join(k for k, v in checks.items() if not v))
 print("smoke test passed")
