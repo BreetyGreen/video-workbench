@@ -10,7 +10,7 @@ jobs:
         include:
           - os: windows-latest
             script: powershell -ExecutionPolicy Bypass -File sync-helper/build.ps1
-          - os: macos-14
+          - os: macos-15
             script: bash sync-helper/build.sh
     runs-on: ${{ matrix.os }}
     steps:

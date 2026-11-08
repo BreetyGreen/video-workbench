@@ -163,6 +163,20 @@ sc asr_check.py voice/me/narration.wav                # 识别回来的文字是
 - 发布由人在抖音 App 或网页（creator.douyin.com）上自己完成，最后的“发布”按钮由本人点。
 - 文案里要带上 BGM 署名。
 
+## 冒烟测试
+
+```bash
+uv run --project tools/sample-cut python tools/sample-cut/smoke_test.py
+```
+
+不需要真实素材、Key 和网络。脚本会用合成画面和声音把整条流程跑一遍：
+
+- 依次运行选镜头拼板、出片、加 BGM、剪映草稿试运行。
+- 检查编码器、真峰值、响度、时长，以及字幕有没有烧进画面。
+- 输出一帧 `smoke-frame.png`，可以肉眼看中文字幕有没有显示正常。
+
+GitHub 的 macOS CI 每次都会跑这个测试。
+
 ## 平台差异
 
 | 项 | Windows（已验证） | macOS（未在真机验证） |
