@@ -172,6 +172,9 @@ for i, c in enumerate(cues, 1):
     srt += [str(i), f"{f(c['start'])} --> {f(c['end'])}", c["text"], ""]
 (OUT / "captions.srt").write_text("\n".join(srt), encoding="utf-8")
 cap_list, cap_y = captions.render_layer(cues, STYLE, end_all, FPS, OUT / "caption-frames")
+(OUT / "render-info.json").write_text(json.dumps({"narration_dir": str(NARR), "caption_style": STYLE_NAME,
+                                                "copy": os.environ.get("COPY", "copy.json")}, ensure_ascii=False),
+                                    encoding="utf-8")
 
 # ---------- 5. mix: voice + gated original action sound (+ optional BGM) ----------
 mix = SPEC["audio"]

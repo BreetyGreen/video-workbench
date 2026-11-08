@@ -2,7 +2,8 @@
 
 usage: uv run --project tools/sample-cut python tools/sample-cut/smoke_test.py [out_dir]
 Builds a tiny project (3 shot folders with Chinese names, synthetic narration and bright BGM), then runs
-make_sheets -> render -> add_bgm -> make_draft --dry-run and checks loudness, true peak, encoder and subtitles.
+make_sheets + scan_materials -> render (styled captions) -> add_bgm -> qa -> make_draft --dry-run and checks
+loudness, true peak, encoder, captions in every style family and the QA gate.
 Writes <out_dir>/smoke-frame.png (frame with burned-in Chinese subtitle) for a visual check.
 """
 import json
@@ -77,10 +78,13 @@ def step(script, *args):
 
 
 step("make_sheets.py", mats)
-assert len(list((work / "takes" / "thumbs").glob("*.jpg"))) == 15, "thumbnails missing"
+step("scan_materials.py", mats)
+assert len(json.loads((work / "takes" / "clips.json").read_text(encoding="utf-8"))) == 3, "scan_materials"
+assert len(list((work / "takes" / "thumbs").glob("*__*.jpg"))) == 15, "thumbnails missing"
 res = json.loads(step("render.py", narr.parent, "smoke"))
 final = Path(res["final"])
 res_bgm = json.loads(step("add_bgm.py", final, bgm, work / "renders" / "smoke" / "smoke-bgm.mp4"))
+step("qa.py", "smoke", work / "renders" / "smoke" / "smoke-bgm.mp4")
 step("make_draft.py", "smoke", "冒烟测试", "--bgm", bgm, "--dry-run")
 
 expect_enc = "aac_at" if IS_MAC else "aac_mf" if IS_WIN else "aac"
@@ -96,7 +100,9 @@ checks = {
 # subtitle burned in: compare the caption band of the final frame with the subtitle-free picture
 frame = out_dir / "smoke-frame.png"
 run(["ffmpeg", "-v", "error", "-y", "-ss", "2.0", "-i", final, "-frames:v", "1", "-update", "1", frame])
-band = f"crop=1080:200:0:{spec['subtitle']['margin_v'] - 20}"
+import captions  # noqa: E402
+
+band = f"crop=1080:220:0:{int(captions.STYLES[res['caption_style']]['y'] * 1920) - 40}"
 
 
 def band_bytes(src):
@@ -108,9 +114,13 @@ a, b = band_bytes(final), band_bytes(work / "renders" / "smoke" / "picture.mp4")
 diff = sum(abs(x - y) for x, y in zip(a, b)) / max(1, len(a))
 checks["subtitle_drawn"] = diff > 3.0
 sub_font = pil_font(48, bold=True)
-if res["subtitles"] == "pillow-overlay" and (IS_MAC or IS_WIN):
-    checks["subtitle_font_bold"] = is_bold(sub_font)  # the sample standard wants bold captions
-print(json.dumps({"subtitles": res["subtitles"], "encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
+if IS_MAC or IS_WIN:
+    checks["fallback_font_bold"] = is_bold(sub_font)  # used when fonts_download.py has not run
+# every style must draw (fonts present or fallback) without error and produce visible ink
+for name, st_ in captions.STYLES.items():
+    img, _ = captions.draw_line("零糖零脂冰冰凉凉", [(0, 2)], st_)
+    checks[f"style_{name}"] = img.getbbox() is not None
+print(json.dumps({"caption_style": res["caption_style"], "encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
                   "subtitle_band_diff": round(diff, 2), "pillow_font": list(sub_font.getname()), "frame": str(frame), "checks": checks}, ensure_ascii=False, indent=1))
 if not all(checks.values()):
     raise SystemExit("smoke test FAILED: " + ", ".join(k for k, v in checks.items() if not v))
