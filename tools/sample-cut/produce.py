@@ -171,6 +171,8 @@ img.convert("RGB").save(cover, quality=92)
 root = Path(os.environ.get("VIDEO_WORKBENCH_DELIVERIES_DIR") or CFG.get("deliveries_dir")
             or (Path.home() / "Movies" / "VideoWorkbench 成片" if IS_MAC else REPO / "data" / "deliveries"))
 deliv = root / dt.date.today().isoformat() / re.sub(r'[\\/:*?"<>|]', "_", title)
+for sub in ("BGM备选", "手机预览"):  # produce owns these: clear leftovers of earlier runs so old mixes never linger
+    shutil.rmtree(deliv / sub, ignore_errors=True)
 (deliv / "手机预览").mkdir(parents=True, exist_ok=True)
 main = versions[0]["file"] if versions else final
 shutil.copy2(main, deliv / f"{title}-成片.mp4")
