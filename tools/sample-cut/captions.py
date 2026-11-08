@@ -107,22 +107,66 @@ def max_chars_for(style: dict, spec_max: int = 15) -> int:
     return max(6, min(spec_max, int((W - 2 * SIDE) / (style["size"] * 1.03 * (1 + (scale - 1) * 0.3)))))
 
 
+# A line must never end on a negation/degree word (不|低于 would read "低于八十五克", the opposite of the fact)
+# and never start with a particle or measure word that belongs to the previous word.
+_NO_END = set("不没未无非别很更最太还也都就才又再把被让给向从在对和与及或的")
+_NO_START = set("的了着过们吗呢吧啊呀哦嘛地得么个只瓶杯盒袋包克升里")
+_NUM = re.compile(rf"{_NUMERAL}{_UNIT}|\d+(?:\.\d+)?\s*[%a-zA-Z]+")
+
+
+def word_bounds(x: str) -> set[int]:
+    """Indices between words (jieba), so a line never ends mid-word (谨慎入|手)."""
+    try:
+        import jieba
+        jieba.setLogLevel(60)
+        pos, out = 0, {0, len(x)}
+        for w in jieba.cut(x):
+            pos += len(w)
+            out.add(pos)
+        return out
+    except ImportError:  # no segmenter: every index is allowed, the other rules still apply
+        return set(range(len(x) + 1))
+
+
+def best_cut(x: str, target: int, max_chars: int, terms) -> int:
+    """Cut index near target that keeps both halves readable and never splits a word or a fact."""
+    protected = spans_of(x, terms) + [(m.start(), m.end()) for m in _NUM.finditer(x)]
+    bounds = word_bounds(x)
+    best, best_score = target, None
+    for cut in range(max(2, len(x) - max_chars), min(len(x) - 1, max_chars) + 1):
+        score = abs(cut - target)
+        if any(a < cut < b for a, b in protected):
+            score += 100
+        if cut not in bounds:
+            score += 60
+        if x[cut - 1] in _NO_END:
+            score += 50
+        if x[cut] in _NO_START:
+            score += 30
+        if best_score is None or score < best_score:
+            best, best_score = cut, score
+    return best
+
+
 def build_cues(units, max_chars: int, end_all: float, emphasis_for) -> list[dict]:
     """units: [{start,end,text,i}] -> cues [{start,end,text,emph:[[a,b]]}] split at punctuation / max_chars,
     never cutting through an emphasis term."""
     cues = []
     for u in units:
         terms = emphasis_for(u)
-        parts = [x for x in re.split(r"[，。！？、,!?；;：:]", u["text"]) if x.strip()]
+        parts = []
+        for x in re.split(r"[，。！？,!?；;：:]", u["text"]):
+            x = x.strip("、 ")
+            if not x:
+                continue
+            # 上班、健身、追剧 stays one line when it fits; otherwise split at the 、
+            parts += [x] if len(x) <= max_chars else [y for y in x.split("、") if y]
         chunks = []
         for x in parts:
             x = x.strip()
             while len(x) > max_chars:
                 n = math.ceil(len(x) / max_chars)
-                cut = math.ceil(len(x) / n)
-                for a, b in spans_of(x, terms):  # move the cut out of a highlighted word
-                    if a < cut < b:
-                        cut = a if a >= 2 else b
+                cut = best_cut(x, math.ceil(len(x) / n), max_chars, terms)
                 chunks.append(x[:cut])
                 x = x[cut:]
             if x:
