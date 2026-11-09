@@ -4,7 +4,7 @@
 
 - 这套脚本由 Codex 或 Claude Code 按步骤调用，不依赖工作台网页服务。
 - 支持 macOS 和 Windows。
-- 已在 Windows 上做完两条成片（绿豆沙、一茶）。macOS 版尚未在真机上跑过，见文末“平台差异”。
+- 已在 Windows 上做完两条成片（绿豆沙、一茶）。macOS 版已在 GitHub 的 Mac 云电脑（macOS 15，M1）上从零跑通全流程（`.github/workflows/mac-acceptance.yml`）；Mac 剪映打开草稿还没验证。见文末“平台差异”。
 
 ## 全自动（推荐）
 
@@ -248,18 +248,20 @@ GitHub 的 macOS CI 每次都会跑这个测试。
 
 ## 平台差异
 
-| 项 | Windows（已验证） | macOS（未在真机验证） |
+| 项 | Windows（已验证） | macOS（GitHub Mac 云电脑已验证） |
 |---|---|---|
 | AAC 编码 | `aac_mf`，自带 `aac` 兜底 | `aac_at`，自带 `aac` 兜底 |
-| 字幕字体 | Microsoft YaHei，从 `C:\Windows\Fonts` 读取 | 自动换成 PingFang SC，由 libass 通过 CoreText 查找 |
-| 字幕烧录 | libass（`ass` 滤镜） | Homebrew 默认的 `ffmpeg` 没有 libass，会自动改用 Pillow 画字幕再叠加，输出里显示 `"subtitles": "pillow-overlay"`。装 `ffmpeg-full` 就会用 libass |
+| 字幕字体 | `styles.json` 里的 OFL 字体（`fonts_download.py` 下载）；缺字体时用 Microsoft YaHei | 同左；缺字体时用系统黑体（苹方或冬青黑体里最粗的一档） |
+| 字幕烧录 | 两边都用 Pillow 把字幕画成透明 PNG 再叠加，不依赖 libass | 同左（Homebrew 默认的 `ffmpeg` 没有 libass 也没关系） |
 | 剪映草稿目录 | `%LOCALAPPDATA%\JianyingPro\User Data\Projects\com.lveditor.draft` | `~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft` |
 | 数据目录（BGM、CosyVoice） | `<仓库>/data/` | `~/Library/Application Support/VideoWorkbench/` |
-| CosyVoice | CPU，约 13 倍实时（2.6 秒音频算 35 秒） | Apple Silicon CPU，速度未实测 |
+| CosyVoice | CPU，约 13 倍实时（2.6 秒音频算 35 秒） | GitHub 的 M1 虚拟机约 40 倍实时（2.5 秒音频算 100 秒）；真 M 芯片应更快 |
 
 ffmpeg 自带的 `aac` 编码器遇到明亮的 BGM 时，真峰值会冲到 +3 dBTP，所以优先用系统编码器。
 
 - 每次编码后都会重新测真峰值，超过 -1 dBTP 就换下一个编码器。都不行就报错，不会交出破音的文件。
 - 在 Mac 上第一次运行时，请确认输出里的 `"encoder"` 是 `aac_at`，并听一遍成片。
 
-`pyJianYingDraft` 生成的草稿只在 Windows 剪映上打开过。Mac 版剪映能不能打开，要在 Mac 上实际导入一次确认。
+`pyJianYingDraft` 生成的草稿只在 Windows 剪映上打开过。Mac 版剪映能不能打开，要在 Mac 上实际导入一次确认（云电脑装不了剪映）。
+
+Mac 全流程验收：`.github/workflows/mac-acceptance.yml` 在全新 Mac 上安装 CosyVoice，然后用合成画面做一条完整视频，并把交付文件夹上传为 artifact `mac-acceptance-delivery`。改到配音相关代码时自动运行，也可以在 Actions 页面手动运行。

@@ -27,7 +27,7 @@
   - 原因：loudnorm 输出 192 kHz，并且缓存约 3 秒；配音一结束，sidechaincompress 就停止输出。实测：25.5 秒的视频，BGM 在 22.4 秒处断掉，设计好的 1.2 秒淡出从来没生效。
   - 修复：loudnorm 后转回 48 kHz，并给侧链信号补静音。
   - 比视频短的曲子先循环拼够长度再混音。
-- `smoke_test.py` 新增检查：加音色、没写授权人的拒绝、我的BGM 扫描、短曲循环和结尾有 BGM。Windows 上全部通过。
+- `smoke_test.py` 新增检查：加音色、没写授权人的拒绝、我的BGM 扫描、短曲循环和结尾有 BGM。Windows 上全部通过；PR #16 的 Mac 全流程验收也通过（第一次失败是测试脚本没先给新曲库打分，已修）。
 - `mac_acceptance.py` 改为走音色库，并在"我的BGM"里放一首截短的旋律曲（带署名）和一首低音曲。验收要求：用到了预制音色，只用旋律曲，低音曲被说明，有无BGM版，署名写进了发布文案。
 
 ### Open
@@ -35,6 +35,27 @@
 - 用户的真实录音还没拿到。每个音色加进来后，要先生成试听让用户确认。
 - 用户还没往"我的BGM"里放曲子。
 - 之前已交付的成片（绿豆沙、一茶）是用旧版混的，结尾约 3 秒没有 BGM。要的话，可以用 `--narration` 沿用原配音重做。
+
+## 2026-11-09 Mac 全流程验收通过（GitHub 的 Mac 云电脑）
+
+用户没有 Mac，所以用 GitHub 提供的 macOS 15 云电脑（Apple M1 虚拟机）模拟"全新 Mac"。工作流：`.github/workflows/mac-acceptance.yml`（PR #14，已合并）。可以手动触发；改到配音相关代码时自动运行。
+
+### Confirmed
+
+- 从零安装本机 CosyVoice（Hugging Face 下载模型，`COSYVOICE_MODEL_SOURCE=huggingface`）：约 5 分钟，冒烟测试通过。
+- 字体、30 首 BGM 下载和 `autopilot_setup.py` 检查通过。
+- `mac_acceptance.py` 用合成画面（不含真实素材）加一茶的 12 句真实文案，走 make_spec → copy_check → `produce.py --voice local`，全自动出片，约 16 分钟。
+- 质检通过：24.2 秒，21 个镜头（平均 1.15 秒），字幕 21 条（样式「清爽底框」）。三个 BGM 版本的响度为 -14.0 到 -14.1 LUFS，真峰值 -2.1 到 -2.9 dBTP。
+- 交付文件夹完整：成片、BGM 备选、手机预览、封面、发布文案、先看这里.md。抽帧确认字幕和高亮显示正常。
+- 第一次运行发现一个真问题：没有百炼 Key 时，`narration_from_whole.py` 按字数估算时间的分支会崩溃（`at()` 未定义）。之前在 Windows 上一直有 Key，所以没暴露。已修复；新增 `VIDEO_WORKBENCH_OFFLINE=1`，可以强制走无 Key 路径做测试。本机对比：估算时间与 ASR 结果相差不超过 0.38 秒。
+- 云电脑上的 CosyVoice 很慢：RTF 约 37–41（2.5 秒音频算 100 秒），模型加载约 100 秒。真 M 芯片 Mac 会快一些，但本机配音做一条视频仍要几分钟到十几分钟；云端配音只要几秒。
+
+### Open
+
+- Mac 版剪映能否打开 `make_draft.py` 生成的草稿：云电脑装不了剪映，要等对方第一次用时确认。
+- Codex 在新电脑上看缩略图、从真素材里挑镜头：要等对方用真素材做第一条时确认。
+- 无 Key 时只能用 CosyVoice 示例音色演示，语速 6.16 字/秒，低于标准（6.6–7.4，只是警告）。对方需要填自己的百炼 Key，或录自己的声音。
+- 走 Hugging Face 下载模型时，CosyVoice 的 wetext 文本规范化前端从 modelscope 拉取失败（403），日志显示 "no frontend is avaliable"。数字、单位的读法可能不如 Windows 上准。国内默认走 modelscope，预计不受影响，但还没在国内 Mac 上确认。
 
 ## 2026-11-09 BGM 听不见的真正原因：曲子以低音为主，手机放不出来
 
@@ -115,7 +136,7 @@
 
 ### Open
 
-- macOS 真机尚未验证：aac_at 编码后的真峰值、PingFang 字幕显示、Mac 剪映导入 pyJianYingDraft 草稿、CosyVoice 在 Apple Silicon 上的安装和速度。
+- macOS 真机尚未验证：aac_at 编码后的真峰值、PingFang 字幕显示、Mac 剪映导入 pyJianYingDraft 草稿、CosyVoice 在 Apple Silicon 上的安装和速度。（2026-11-09 更新：除剪映导入外，都已在 GitHub 的 Mac 云电脑上验证，见顶部条目。）
 
 ## 2026-09-14 字幕“花字”：关键词高亮 + 弹入 + 片头发光
 

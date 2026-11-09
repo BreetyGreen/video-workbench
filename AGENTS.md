@@ -28,7 +28,7 @@ When the user asks for a product video "to the sample standard" (样片标准), 
 - QA before delivery: `copy_check.py` must pass before any voice is made; `qa.py` (run by `produce.py`) checks duration, shots, speaking rate, ASR match, -14 LUFS, true peak, black frames and captions. Write material problems into `notes.md`, which goes into the delivery's `先看这里.md`.
 - Captions: style comes from `styles.json` (auto-picked per product, or `copy.json` "style"). Fonts are SIL OFL only (`fonts_download.py`); never copy fonts, 花字 or templates out of Jianying into rendered videos. In Jianying drafts, use Jianying's own bundled fonts and animations.
 - Publishing stays manual: the user presses Publish in Douyin themself.
-- macOS is code-adapted but not yet verified on a real Mac (aac_at encoder, PingFang subtitles, Jianying draft import, CosyVoice install). Report the first results in `docs/progress.md`.
+- macOS: the whole pipeline is verified on GitHub's macOS 15 (Apple M1 VM) runner by `.github/workflows/mac-acceptance.yml`: fresh CosyVoice install, fonts and BGM download, a full no-Key video with the local voice, QA pass, `aac_at` encoder. Not yet verified: opening a generated draft in Mac Jianying, and Codex picking takes from real footage on a new Mac. Report those first results in `docs/progress.md`.
 
 ## Verification
 
