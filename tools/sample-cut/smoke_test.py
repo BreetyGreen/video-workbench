@@ -120,6 +120,38 @@ if IS_MAC or IS_WIN:
 for name, st_ in captions.STYLES.items():
     img, _ = captions.draw_line("零糖零脂冰冰凉凉", [(0, 2)], st_)
     checks[f"style_{name}"] = img.getbbox() is not None
+
+# voice library + 我的BGM folder, in a private data dir so the real settings are untouched
+iso = {**env, "VIDEO_WORKBENCH_DATA_DIR": str(out_dir / "data"), "VIDEO_WORKBENCH_VOICES_DIR": str(out_dir / "voices"),
+       "VIDEO_WORKBENCH_MY_BGM_DIR": str(out_dir / "my-bgm")}
+rec = out_dir / "rec.m4a"  # stand-in "recording": 1 s silence + 7 s tone (+ trailing silence to trim)
+run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=220:sample_rate=44100:d=7,adelay=1000,apad=pad_dur=1",
+     "-c:a", "aac", rec])
+
+
+def vcli(*args):
+    return subprocess.run([sys.executable, str(HERE / "voices.py"), *map(str, args)], env=iso, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+r1 = vcli("add", rec, "--name", "测试 女声", "--text", "宝子们看过来这款真的超好喝冰冰凉凉一口", "--consent", "own")
+r2 = vcli("add", rec, "--name", "别人", "--text", "宝子们看过来这款真的超好喝冰冰凉凉一口", "--consent", "permission")
+lst = json.loads(vcli("list").stdout)
+v0 = lst["voices"][0] if lst["voices"] else {}
+checks["voice_add"] = r1.returncode == 0 and v0.get("name") == "测试_女声" and v0.get("default") and 6.5 < v0["seconds"] < 7.5
+checks["voice_permission_needs_who"] = r2.returncode != 0 and len(lst["voices"]) == 1
+(out_dir / "my-bgm").mkdir(exist_ok=True)
+run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=660:sample_rate=48000:d=3", "-c:a", "libmp3lame",
+     out_dir / "my-bgm" / "短曲.mp3"])
+mine = json.loads(subprocess.run([sys.executable, str(HERE / "my_bgm.py")], env=iso, capture_output=True, text=True,
+                                 encoding="utf-8").stdout)
+checks["my_bgm_scan"] = [t["title"] for t in mine["tracks"]] == ["短曲"] and (out_dir / "my-bgm" / "说明.txt").is_file()
+# a 3 s track under the longer video must loop: music still present in the last second
+short = json.loads(step("add_bgm.py", final, out_dir / "my-bgm" / "短曲.mp3", work / "renders" / "smoke" / "short-bgm.mp4"))
+dur_v = res["duration"]
+tail = subprocess.run(["ffmpeg", "-hide_banner", "-ss", f"{dur_v - 1.6:.2f}", "-t", "0.4", "-i", short["out"], "-af",
+                       "bandpass=f=660:w=60,volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr
+checks["short_bgm_loops"] = float(tail.split("mean_volume:")[1].split("dB")[0]) > -50
 print(json.dumps({"caption_style": res["caption_style"], "encoder": res["encoder"], "true_peak": res["true_peak"], "bgm_true_peak": res_bgm["true_peak"],
                   "subtitle_band_diff": round(diff, 2), "pillow_font": list(sub_font.getname()), "frame": str(frame), "checks": checks}, ensure_ascii=False, indent=1))
 if not all(checks.values()):

@@ -1,7 +1,9 @@
 """One-time setup for autopilot (idempotent): fonts, BGM library, default settings, readiness report.
 
 usage: python autopilot_setup.py [--own-voice my.wav --own-voice-text "录音原话"] [--cloud-voice longxiaochun_v2]
-                                 [--deliveries <dir>] [--jianying-draft]
+                                 [--deliveries <dir>] [--jianying-draft] [--no-cloud-asr]
+Voices: add presets with voices.py (--own-voice is the older single-voice form; it becomes the preset 我的声音).
+BGM: creates the 我的BGM folder (my_bgm.py); tracks put there are used before the built-in library.
 writes <data_home>/sample-cut.json. Never asks for or prints a key: a DashScope key is read from the environment only.
 """
 import argparse
@@ -22,6 +24,7 @@ ap.add_argument("--cloud-voice")
 ap.add_argument("--deliveries")
 ap.add_argument("--jianying-draft", action="store_true")
 ap.add_argument("--skip-downloads", action="store_true")
+ap.add_argument("--no-cloud-asr", action="store_true", help="never call DashScope, not even for caption timing/QA")
 a = ap.parse_args()
 
 cfg_path = data_home() / "sample-cut.json"
@@ -44,6 +47,8 @@ if a.deliveries:
     cfg["deliveries_dir"] = str(Path(a.deliveries).expanduser())
 if a.jianying_draft:
     cfg["jianying_draft"] = True
+if a.no_cloud_asr:
+    cfg["cloud_asr"] = False
 cfg_path.parent.mkdir(parents=True, exist_ok=True)
 cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
 
@@ -70,17 +75,31 @@ except SystemExit:
     key = False
 cv = Path(os.environ.get("COSYVOICE_HOME") or cfg.get("cosyvoice_home") or data_home() / "CosyVoice")
 cv_ok = (cv / (".venv/Scripts/python.exe" if IS_WIN else ".venv/bin/python")).exists()
+sys.path.insert(0, str(HERE))
+import my_bgm  # noqa: E402
+import voices  # noqa: E402
+
+presets = voices.library()
+default_voice = voices.load_cfg().get("default_voice")
+my_dir = my_bgm.ensure_folder()
+my_tracks = my_bgm.scan()
+asr = key and cfg.get("cloud_asr") is not False
 ready = {
     "ffmpeg": bool(shutil.which("ffmpeg")),
     "fonts": f"{sum(1 for f in fonts.values() if f.get('sha256'))}/{len(fonts) or 6}",
     "bgm_tracks": len(json.loads(bgm_man.read_text(encoding="utf-8"))) if bgm_man.is_file() else 0,
     "dashscope_key": key,
     "cosyvoice_installed": cv_ok,
-    "own_voice": bool(cfg.get("own_voice_prompt")),
-    "voice_route": ("本机克隆自己的声音" if cfg.get("own_voice_prompt") and cv_ok else
-                    f"云端 {cfg['cloud_voice']}" if key else
-                    "本机 CosyVoice 示例音色（仅演示）" if cv_ok else "缺：需要百炼 Key 或安装 CosyVoice"),
-    "timing": "语音识别逐字对齐" if key else "按字数估算（无 Key）",
+    "voices": [v["name"] for v in presets],
+    "default_voice": default_voice,
+    "voice_route": (f"本机 CosyVoice，音色「{default_voice or presets[0]['name']}」" if presets and cv_ok else
+                    "本机 CosyVoice 示例音色（仅演示：用 voices.py add 加入你的声音）" if cv_ok else
+                    f"云端 {cfg['cloud_voice']}（本机 CosyVoice 没装）" if key else
+                    "缺：需要安装 CosyVoice（或百炼 Key）"),
+    "timing": "语音识别逐字对齐（百炼）" if asr else "按字数估算（不联网）",
+    "my_bgm_dir": str(my_dir),
+    "my_bgm_tracks": len(my_tracks),
+    "bgm_route": "我的BGM 文件夹" if my_tracks else "内置 CC BY 曲库（我的BGM 文件夹是空的）",
     "settings": str(cfg_path),
 }
 print(json.dumps(ready, ensure_ascii=False, indent=1))

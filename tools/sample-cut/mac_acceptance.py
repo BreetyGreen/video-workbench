@@ -62,11 +62,55 @@ copy = {
 (work / "notes.md").write_text("- 验收用合成画面（不含任何真实素材），只验证声音、字幕、BGM、质检和交付流程。\n", encoding="utf-8")
 
 env = {**os.environ, "SAMPLE_CUT_WORK": str(work), "VIDEO_WORKBENCH_DELIVERIES_DIR": str(out / "delivery"),
+       "VIDEO_WORKBENCH_VOICES_DIR": str(out / "voices"), "VIDEO_WORKBENCH_MY_BGM_DIR": str(out / "my-bgm"),
        "PYTHONIOENCODING": "utf-8"}
+os.environ.update(env)
+from vw_common import data_home  # noqa: E402
+
+# "我的BGM": a melody track cut to 15 s (must loop under the 24 s video, with a credit file) + the most bass-heavy
+# library track (must be skipped as inaudible on phones)
+lib = Path(os.environ.get("VIDEO_WORKBENCH_BGM_DIR") or data_home() / "bgm-library" / "incompetech")
+man = sorted(json.loads((lib / "manifest.json").read_text(encoding="utf-8")), key=lambda m: -m.get("phone_db", -99))
+my = out / "my-bgm"
+my.mkdir(exist_ok=True)
+melody, bassy = man[0], man[-1]
+run(["ffmpeg", "-v", "error", "-y", "-i", str(lib / "tracks" / Path(melody["file"]).name), "-t", "15",
+     "-c", "copy", str(my / "测试旋律.mp3")])
+(my / "测试旋律.txt").write_text(melody["attribution"] + "\n", encoding="utf-8")
+run(["ffmpeg", "-v", "error", "-y", "-i", str(lib / "tracks" / Path(bassy["file"]).name), "-t", "40", "-c", "copy",
+     str(my / "测试低音.mp3")])
+
+voice_args = []
+if voice == "local":  # a preset in the voice library (CosyVoice's own sample, consent "demo": tests only)
+    cv = Path(os.environ.get("COSYVOICE_HOME") or data_home() / "CosyVoice")
+    r = subprocess.run([sys.executable, str(HERE / "voices.py"), "add", str(cv / "asset" / "zero_shot_prompt.wav"),
+                        "--name", "验收示例", "--text", "希望你以后能够做的比我还好呦。", "--consent", "demo"], env=env)
+    if r.returncode:
+        raise SystemExit("voices.py add failed")
+    voice_args = ["--voice-name", "验收示例"]
+
 for script, args in (("make_spec.py", ["一茶茉莉白牡丹"]), ("copy_check.py", [])):
     r = subprocess.run([sys.executable, str(HERE / script), *args], env=env, cwd=work)
     if r.returncode:
         raise SystemExit(f"{script} failed")
-r = subprocess.run([sys.executable, str(HERE / "produce.py"), "--voice", voice], env=env, cwd=work)
+r = subprocess.run([sys.executable, str(HERE / "produce.py"), "--voice", voice, *voice_args], env=env, cwd=work,
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
+print(r.stdout[-6000:], r.stderr[-3000:], sep="\n")
 print(f"produce.py exit {r.returncode}; delivery under {out / 'delivery'}")
-sys.exit(r.returncode)
+if r.returncode:
+    sys.exit(r.returncode)
+
+summary = json.loads(r.stdout[r.stdout.rindex("\n{") + 1:r.stdout.rindex("}") + 1])
+deliv = Path(summary["delivery"])
+report = (deliv / "先看这里.md").read_text(encoding="utf-8")
+problems = [msg for ok, msg in [
+    (summary["bgm_source"] == "我的BGM", f"BGM should come from 我的BGM, got {summary['bgm_source']}"),
+    (summary["bgm"] == ["测试旋律"], f"only the melody track should be used, got {summary['bgm']}"),
+    ((deliv / "一茶茉莉白牡丹-无BGM版.mp4").is_file(), "无BGM版 missing"),
+    ("测试低音" in report, "the skipped bass-only track is not explained in 先看这里.md"),
+    (melody["attribution"] in (deliv / "发布文案.txt").read_text(encoding="utf-8"), "credit line missing in 发布文案.txt"),
+    (voice != "local" or "验收示例" in summary["voice"], f"voice preset not used: {summary['voice']}"),
+] if not ok]
+if problems:
+    raise SystemExit("acceptance checks failed:\n- " + "\n- ".join(problems))
+print("acceptance checks passed (voice preset, 我的BGM, bass-only skip, looping short track, 无BGM版, credit)")
