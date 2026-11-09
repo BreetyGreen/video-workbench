@@ -70,10 +70,13 @@ from vw_common import data_home  # noqa: E402
 # "我的BGM": a melody track cut to 15 s (must loop under the 24 s video, with a credit file) + the most bass-heavy
 # library track (must be skipped as inaudible on phones)
 lib = Path(os.environ.get("VIDEO_WORKBENCH_BGM_DIR") or data_home() / "bgm-library" / "incompetech")
-man = sorted(json.loads((lib / "manifest.json").read_text(encoding="utf-8")), key=lambda m: -m.get("phone_db", -99))
+import bgm_analyze  # noqa: E402  (a fresh library has no phone_db yet: score it before picking test tracks)
+
+man = sorted(bgm_analyze.analyze(), key=lambda m: -m.get("phone_db", -99))
 my = out / "my-bgm"
 my.mkdir(exist_ok=True)
 melody, bassy = man[0], man[-1]
+assert melody["phone_db"] >= -6 > bassy["phone_db"], (melody.get("phone_db"), bassy.get("phone_db"))
 run(["ffmpeg", "-v", "error", "-y", "-i", str(lib / "tracks" / Path(melody["file"]).name), "-t", "15",
      "-c", "copy", str(my / "测试旋律.mp3")])
 (my / "测试旋律.txt").write_text(melody["attribution"] + "\n", encoding="utf-8")
