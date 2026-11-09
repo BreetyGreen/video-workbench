@@ -15,13 +15,37 @@
 3. 读包装上的字（`ocr_text.py`，Codex 再看清晰帧确认）
 4. 写文案并过检查（`copy_check.py`）
 5. 生成剪辑参数（`make_spec.py`）
-6. 一条命令完成剩下的（`produce.py`）：配音、出片、3 版 BGM、质检（`qa.py`）、封面、手机预览、交付文件夹和报告
+6. 一条命令完成剩下的（`produce.py`）：配音、出片、最多 3 版 BGM、质检（`qa.py`）、封面、手机预览、无BGM版、交付文件夹和报告
 
-第一次使用前运行一次 `autopilot_setup.py`：下载字体和 BGM 曲库、写默认设置、报告还缺什么。
+第一次使用前运行一次 `autopilot_setup.py`：下载字体和 BGM 曲库，建好“我的BGM”文件夹，写默认设置，并报告还缺什么。
 
-- **配音**：有百炼 Key 时用云端音色（默认龙小淳），配音时间用语音识别逐字对齐。
-- **自己的声音**：先装 CosyVoice，再运行 `autopilot_setup.py --own-voice 我的录音.wav --own-voice-text "录音原话"`，之后都用自己的声音。
-- **没有 Key 也没有 CosyVoice**：无法配音，`autopilot_setup.py` 会直接说明缺什么。
+### 配音：本机 CosyVoice + 预制音色库
+
+- 默认用本机 CosyVoice，不联网、不花钱。只有本机没装 CosyVoice 时，才退回百炼云端音色。
+- 音色库可以放多个预制音色，每个是一段 5–15 秒的录音加上录音原话：
+
+```bash
+sc voices.py add 录音.m4a --name 女声活泼 --text "录音里的每一个字" --consent own --preview   # 自己的声音
+sc voices.py add 录音.m4a --name 同事小王 --text "…" --consent permission --who "王某，书面同意 2026-11-09"
+sc voices.py list                 # 有哪些音色、哪个是默认、试听文件在哪
+sc voices.py default 女声活泼      # 设默认音色
+sc produce.py --voice-name 同事小王 # 这一条换个音色（也可以在 copy.json 里写 "voice"）
+```
+
+- 只能用你自己的声音，或本人书面同意的声音。不能用从别人的视频、直播、广告里截下来的声音，也不能用网上的“主播/明星音色”。
+- 录音要求：只有一个人说话，安静，不带音乐，`--text` 要和录音一字不差。程序会自动去掉首尾静音、统一音量。
+- 音色库为空时，只能用 CosyVoice 官方示例音色演示。
+- 配音时间对齐：有百炼 Key 时用语音识别逐字对齐（只花几分钱），没有 Key 时按字数估算（误差约 0.4 秒）。完全不想联网，就运行 `autopilot_setup.py --no-cloud-asr`。
+- 旧的 `--own-voice` 设置会自动变成音色库里的「我的声音」。
+
+### BGM：先用“我的BGM”文件夹
+
+- 文件夹位置：Mac 是 `~/Movies/VideoWorkbench 我的BGM`，Windows 是 `<仓库>/data/我的BGM`。也可以用 `sample-cut.json` 的 `my_bgm_dir` 或环境变量 `VIDEO_WORKBENCH_MY_BGM_DIR` 改位置。
+- 把 mp3、m4a、wav 等音乐文件放进去，每条视频会从里面挑最多 3 首。文件夹为空时，才用内置的 30 首 CC BY 曲库。
+- 以低音鼓点为主的曲子手机外放几乎听不见，有更好的曲子时会被跳过，并在 `先看这里.md` 里说明。比视频短的曲子会自动循环。
+- 需要署名的曲子，在旁边放一个同名 `.txt`，第一行写署名，会自动加进 `发布文案.txt`。
+- 放进去的音乐由你自己确认有使用权。可以用的来源：Pixabay Music、Mixkit（免费、可商用、不用署名），Uppbeat（免费版要署名）。
+- 想用抖音热门音乐：上传交付文件夹里的 `<商品>-无BGM版.mp4`，在抖音发布页里选音乐。
 
 下面是手动一步步的用法，适合想自己控制每一步的时候。
 

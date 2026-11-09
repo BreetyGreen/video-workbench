@@ -40,18 +40,32 @@ else:  # skip a quiet intro: first moment the track gets within 12 dB of its lou
             if t < 8:
                 skip = t
             break
+need = skip + dur + 1
+looped = None
+if probe_dur(bgm) < need:  # a track shorter than the video: loop it into a temp file first
+    # (-stream_loop straight into this graph ends the music early once sidechaincompress is involved)
+    looped = out.parent / f".loop-{out.stem}.wav"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    run(["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(bgm), "-t", f"{need + 0.5:.3f}",
+         "-ar", "48000", "-ac", "2", str(looped)])
 fade_out_at = max(0.0, dur - 1.2)
 fc = (f"[1:a]atrim={skip:.3f}:{skip + dur + 1:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
       # phones barely reproduce < ~200 Hz: drop that bass first so the loudness target lands on the audible melody
-      f"highpass=f=180:poles=2,loudnorm=I={bgm_lufs}:TP=-6:LRA=7,afade=t=in:d=0.4,afade=t=out:st={fade_out_at:.3f}:d=1.2[bg];"
-      f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit[main][key];"
+      # loudnorm outputs 192 kHz and holds ~3 s of look-ahead: back to 48 kHz, and pad the sidechain key so the
+      # compressor doesn't stop when the voice track ends (before this fix the music cut out ~3 s before the end)
+      f"highpass=f=180:poles=2,loudnorm=I={bgm_lufs}:TP=-6:LRA=7,aresample=48000,"
+      f"afade=t=in:d=0.4,afade=t=out:st={fade_out_at:.3f}:d=1.2[bg];"
+      f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit[main][k0];[k0]apad=pad_dur=6[key];"
       f"[bg][key]sidechaincompress=threshold=0.1:ratio=2:attack=40:release=450:makeup=1[bgd];"
       f"[main][bgd]amix=inputs=2:normalize=0:duration=first,loudnorm=I=-14:TP=-1.5:LRA=11,"
       f"aresample=192000,alimiter=limit=0.79:level=false:attack=1:release=50,aresample=48000[a]")
 out.parent.mkdir(parents=True, exist_ok=True)
-enc = encode_checked(lambda a: ["ffmpeg", "-v", "error", "-y", "-i", str(video), "-i", str(bgm), "-filter_complex", fc,
+enc = encode_checked(lambda a: ["ffmpeg", "-v", "error", "-y", "-i", str(video), "-i", str(looped or bgm),
+                                "-filter_complex", fc,
                                 "-map", "0:v", "-map", "[a]", "-c:v", "copy", *a, "-movflags", "+faststart",
                                 "-t", f"{dur:.3f}", str(out)], out)
+if looped:
+    looped.unlink(missing_ok=True)
 m = bgm.parent.parent / "manifest.json"
 credit = None
 if m.exists():

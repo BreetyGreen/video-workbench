@@ -1,14 +1,18 @@
 """Autopilot final stage: everything after the judgement calls, in one command, no questions.
 
 usage (inside the project work dir, after takes/selected-takes.json, copy.json and spec.json exist):
-  python produce.py [--voice auto|cloud|local] [--cloud-voice longxiaochun_v2] [--bgm-versions 3] [--bgm-lufs -20] [--draft]
+  python produce.py [--voice-name 女声活泼] [--voice auto|local|cloud] [--bgm-versions 3] [--bgm-lufs -20] [--draft]
                    [--narration voice/x/narration]   (reuse an approved voice instead of synthesizing)
+voice: local CosyVoice with a preset from the voice library (voices.py), picked by --voice-name > copy.json "voice" >
+       default_voice > first preset. The cloud voice is used only with --voice cloud or when CosyVoice isn't installed.
+BGM:   tracks in the user's 我的BGM folder (my_bgm.py) first; the built-in CC BY library only when that folder is empty.
 steps: copy_check -> voice (whole script) -> narration timing -> render -> BGM versions -> QA -> cover ->
-       phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits
-settings: <data_home>/sample-cut.json (voice engine, cloud voice, own-voice prompt, delivery dir) - see AUTOPILOT.md
+       phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits, 无BGM版 (for Douyin's own music)
+settings: <data_home>/sample-cut.json (default_voice, cloud_asr, my_bgm_dir, delivery dir, ...) - see AUTOPILOT.md
 """
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -24,7 +28,9 @@ WORK = work_dir()
 CFG_PATH = data_home() / "sample-cut.json"
 CFG = json.loads(CFG_PATH.read_text(encoding="utf-8")) if CFG_PATH.is_file() else {}
 ap = argparse.ArgumentParser()
-ap.add_argument("--voice", default=CFG.get("voice_engine", "auto"), choices=["auto", "cloud", "local"])
+ap.add_argument("--voice", default=CFG.get("voice_engine", "auto"), choices=["auto", "cloud", "local"],
+                help="auto = local CosyVoice whenever it is installed; cloud only as a fallback")
+ap.add_argument("--voice-name", help="preset from the voice library (voices.py list)")
 ap.add_argument("--cloud-voice", default=CFG.get("cloud_voice", "longxiaochun_v2"))
 ap.add_argument("--bgm-versions", type=int, default=CFG.get("bgm_versions", 3))
 ap.add_argument("--bgm-lufs", type=float, default=CFG.get("bgm_lufs", -20.0),
@@ -69,8 +75,8 @@ if a.narration:  # reuse an approved voice: skip synthesis and timing
     voice_label = f"沿用已有配音（{_n.get('engine', '?')} / {_n.get('voice', '?')}）"
 else:
     engine = a.voice
-    if engine == "auto":
-        engine = "local" if CFG.get("own_voice_prompt") and cv_py.exists() else ("cloud" if have_key else "local")
+    if engine == "auto":  # local first: free, offline, and the preset voices live there
+        engine = "local" if cv_py.exists() else ("cloud" if have_key else "local")
     if engine == "cloud":
         if not have_key:
             raise SystemExit("云端配音需要 VIDEO_WORKBENCH_DASHSCOPE_API_KEY；或装 CosyVoice 走本机配音")
@@ -88,22 +94,39 @@ else:
         voice_label = f"云端 CosyVoice（{a.cloud_voice}）"
     else:
         if not cv_py.exists():
-            raise SystemExit(f"本机配音没有安装（{cv_home}）。先运行 tools/cosyvoice/install.sh，或设置百炼 Key 走云端配音")
-        prompt = CFG.get("own_voice_prompt") or str(cv_home / "asset" / "zero_shot_prompt.wav")
-        prompt_text = CFG.get("own_voice_text") or "希望你以后能够做的比我还好呦。"
-        vdir = WORK / "voice" / ("own" if CFG.get("own_voice_prompt") else "cosyvoice-demo")
+            raise SystemExit(f"本机配音没有安装（{cv_home}）。先运行 tools/cosyvoice/install.sh（Windows：install.ps1）")
+        import voices
+        preset = voices.pick(a.voice_name, copy)
+        if preset:
+            prompt, prompt_text, vstyle = preset["prompt"], preset["text"], preset.get("style") or "none"
+            vdir = WORK / "voice" / voices.safe_name(preset["name"])
+            voice_label = f"本机 CosyVoice「{preset['name']}」（{preset['consent_label']}）"
+        else:  # empty library: CosyVoice's bundled sample, for trying the pipeline only
+            prompt = str(cv_home / "asset" / "zero_shot_prompt.wav")
+            prompt_text, vstyle = "希望你以后能够做的比我还好呦。", "none"
+            vdir = WORK / "voice" / "cosyvoice-demo"
+            voice_label = "本机 CosyVoice（官方示例音色，仅演示：音色库是空的，用 voices.py add 加入你的声音）"
         whole = vdir / "whole.wav"
-        if not whole.exists():
+        # re-synthesize when the copy, the prompt recording or the style changed since the last run
+        sig = hashlib.sha256("\n".join([text, prompt_text, vstyle, str(Path(prompt).stat().st_size)]).encode()).hexdigest()[:16]
+        sig_p = vdir / "whole.sig"
+        if not whole.exists() or not sig_p.is_file() or sig_p.read_text().strip() != sig:
+            vdir.mkdir(parents=True, exist_ok=True)
+            print(f"--- 本机配音：{voice_label}（CPU 上要几分钟）", flush=True)
             r = subprocess.run([str(cv_py), str(REPO / "tools" / "cosyvoice" / "clone_tts.py"), "--prompt", prompt,
-                                "--prompt-text", prompt_text, "--text-file", str(WORK / "copy.json"), "--out", str(whole)],
+                                "--prompt-text", prompt_text, "--style", vstyle, "--text-file", str(WORK / "copy.json"),
+                                "--out", str(whole)],
                                env={**env, "COSYVOICE_HOME": str(cv_home)}, capture_output=True, text=True,
                                encoding="utf-8", errors="replace")
             if r.returncode:
                 print(r.stderr[-2000:])
                 raise SystemExit("本机配音失败")
-        voice_label = "本机 CosyVoice（" + ("自己的声音" if CFG.get("own_voice_prompt") else "官方示例音色，仅演示") + "）"
+            sig_p.write_text(sig)
+            shutil.rmtree(vdir / "narration", ignore_errors=True)
     narr_dir = vdir / "narration"
     env["VOICE_ENGINE"] = engine
+    if CFG.get("cloud_asr") is False:  # settings: never call the cloud, not even for timing/QA, when a key exists
+        env["VIDEO_WORKBENCH_OFFLINE"] = "1"
     step("narration_from_whole.py", whole, narr_dir)
 narr = json.loads((narr_dir / "narration.json").read_text(encoding="utf-8"))
 
@@ -112,38 +135,56 @@ render_out = json.loads(step("render.py", narr_dir, a.name).strip().splitlines()
 R = WORK / "renders" / a.name
 final = R / f"{a.name}.mp4"
 
-# ---------- BGM: pick tracks by the product's mood, mix N versions ----------
+# ---------- BGM: the user's 我的BGM folder first, else the CC BY library by mood; mix N versions ----------
+sys.path.insert(0, str(HERE))
+import my_bgm  # noqa: E402
+
 lib = Path(os.environ.get("VIDEO_WORKBENCH_BGM_DIR") or data_home() / "bgm-library" / "incompetech")
-manifest = json.loads((lib / "manifest.json").read_text(encoding="utf-8")) if (lib / "manifest.json").is_file() else []
-if manifest:  # score tracks by phone-audible share once; skip bass-only grooves that vanish on phone speakers
-    import bgm_analyze
-    manifest = bgm_analyze.analyze()
-tracks = [m for m in manifest if (lib / "tracks" / Path(m["file"]).name).is_file()]
-audible = [m for m in tracks if m.get("phone_db", 0) >= -6.0]
-tracks = audible if len(audible) >= 3 else tracks
-versions = []
-if tracks and a.bgm_versions > 0:
-    sys.path.insert(0, str(HERE))
-    import captions
-    blob = copy.get("product", "") + text
-    moods = {m for m, kws in captions.LIB["mood_keywords"].items() if any(k in blob for k in kws)}
-    want = {"茶": ["Relaxed", "Calming", "Light", "Bright"], "健康": ["Bright", "Light", "Uplifting"],
-            "饮品": ["Bright", "Uplifting", "Carefree", "Happy"], "甜品": ["Playful", "Happy", "Quirky", "Bouncy"],
-            "零食": ["Happy", "Bouncy", "Funky", "Playful"], "辣味": ["Funky", "Groovy", "Bouncy"],
-            "母婴": ["Playful", "Light", "Happy"], "日用": ["Bright", "Uplifting", "Light"]}
-    words = [w for m in moods for w in want.get(m, [])] or ["Bright", "Happy", "Uplifting"]
-    score = lambda m: (sum(w.lower() in (m.get("feel") or "").lower() for w in words) * 10 + m.get("score", 0)
-                       + 2 * m.get("phone_db", -6))  # prefer melody that a phone speaker can play
-    ranked = sorted(tracks, key=lambda m: (-score(m), m["title"]))
-    seed = sum(map(ord, copy.get("product", ""))) % max(1, min(6, len(ranked)))
-    chosen = (ranked[seed:] + ranked[:seed])[:a.bgm_versions]  # different products get different tracks
-    for m in chosen:
-        t = Path(m["file"]).name
-        out = R / f"{a.name}-BGM-{Path(t).stem}.mp4"
-        res = json.loads(step("add_bgm.py", final, lib / "tracks" / t, out, a.bgm_lufs).strip().splitlines()[-1])
-        versions.append({"title": m["title"], "file": out, "credit": m["attribution"], **res})
+mine = my_bgm.scan()
+bgm_note = ""
+seed_of = lambda n: sum(map(ord, copy.get("product", ""))) % max(1, n)  # different products get different tracks
+picks = []
+if mine:
+    clear = [m for m in mine if m["phone_db"] >= -6.0]  # bass-only grooves vanish on phone speakers
+    if not clear:
+        bgm_note = "我的BGM 里的曲子都以低音为主，手机外放可能听不清，建议换旋律明显的曲子"
+    elif len(clear) < len(mine):
+        bgm_note = "；".join(f"「{m['title']}」以低音为主，手机外放几乎听不见，这次没用" for m in mine if m["phone_db"] < -6.0)
+    pool = sorted(clear or mine, key=lambda m: (-m["phone_db"], m["title"]))
+    k = seed_of(len(pool))
+    picks = [{"title": m["title"], "path": Path(m["path"]), "credit": m["credit"], "source": "我的BGM"}
+             for m in (pool[k:] + pool[:k])[:a.bgm_versions]]
 else:
-    print("! BGM library missing: run bgm_pick.py + bgm_download.py once; delivering without BGM")
+    manifest = json.loads((lib / "manifest.json").read_text(encoding="utf-8")) if (lib / "manifest.json").is_file() else []
+    if manifest:  # score tracks by phone-audible share once; skip bass-only grooves that vanish on phone speakers
+        import bgm_analyze
+        manifest = bgm_analyze.analyze()
+    tracks = [m for m in manifest if (lib / "tracks" / Path(m["file"]).name).is_file()]
+    audible = [m for m in tracks if m.get("phone_db", 0) >= -6.0]
+    tracks = audible if len(audible) >= 3 else tracks
+    if tracks:
+        import captions
+        blob = copy.get("product", "") + text
+        moods = {m for m, kws in captions.LIB["mood_keywords"].items() if any(k in blob for k in kws)}
+        want = {"茶": ["Relaxed", "Calming", "Light", "Bright"], "健康": ["Bright", "Light", "Uplifting"],
+                "饮品": ["Bright", "Uplifting", "Carefree", "Happy"], "甜品": ["Playful", "Happy", "Quirky", "Bouncy"],
+                "零食": ["Happy", "Bouncy", "Funky", "Playful"], "辣味": ["Funky", "Groovy", "Bouncy"],
+                "母婴": ["Playful", "Light", "Happy"], "日用": ["Bright", "Uplifting", "Light"]}
+        words = [w for m in moods for w in want.get(m, [])] or ["Bright", "Happy", "Uplifting"]
+        score = lambda m: (sum(w.lower() in (m.get("feel") or "").lower() for w in words) * 10 + m.get("score", 0)
+                           + 2 * m.get("phone_db", -6))  # prefer melody that a phone speaker can play
+        ranked = sorted(tracks, key=lambda m: (-score(m), m["title"]))
+        k = seed_of(min(6, len(ranked)))
+        picks = [{"title": m["title"], "path": lib / "tracks" / Path(m["file"]).name, "credit": m["attribution"],
+                  "source": "内置曲库：Kevin MacLeod，CC BY 4.0，需署名"}
+                 for m in (ranked[k:] + ranked[:k])[:a.bgm_versions]]
+versions = []
+for m in picks if a.bgm_versions > 0 else []:
+    out = R / f"{a.name}-BGM-{re.sub(r'[^0-9A-Za-z一-龥]+', '_', m['title']).strip('_')[:40]}.mp4"
+    res = json.loads(step("add_bgm.py", final, m["path"], out, a.bgm_lufs).strip().splitlines()[-1])
+    versions.append({**res, **m, "file": out})
+if not versions:
+    print(f"! 没有 BGM：我的BGM 文件夹（{my_bgm.folder()}）是空的，内置曲库也没下载（autopilot_setup.py）")
 
 # ---------- QA ----------
 qa_rc = subprocess.run([sys.executable, str(HERE / "qa.py"), a.name, *[str(v["file"]) for v in versions]], env=env,
@@ -176,6 +217,11 @@ for sub in ("BGM备选", "手机预览"):  # produce owns these: clear leftovers
 (deliv / "手机预览").mkdir(parents=True, exist_ok=True)
 main = versions[0]["file"] if versions else final
 shutil.copy2(main, deliv / f"{title}-成片.mp4")
+no_bgm = deliv / f"{title}-无BGM版.mp4"
+if versions:  # voice + action sounds only: upload this one when picking a hot track inside Douyin
+    shutil.copy2(final, no_bgm)
+elif no_bgm.exists():
+    no_bgm.unlink()
 if len(versions) > 1:
     (deliv / "BGM备选").mkdir(exist_ok=True)
     for v in versions[1:]:
@@ -188,14 +234,17 @@ for src, name in [(main, f"{title}-成片"), *[(v["file"], f"{title}-BGM-{v['tit
 shutil.copy2(cover, deliv / "封面.jpg")
 shutil.copy2(R / "captions.srt", deliv / "字幕.srt")
 shutil.copy2(R / "qa.json", deliv / "质检.json")
-credit = versions[0]["credit"] if versions else ""
+credit = (versions[0]["credit"] or "") if versions else ""
 facts = copy.get("facts_from_package", [])
 post = copy.get("post_caption") or f"{title}｜{copy['sentences'][1]['text'].rstrip('，。！')}"
 (deliv / "发布文案.txt").write_text(post + "\n\n" + (f"BGM：{credit}\n" if credit else ""), encoding="utf-8")
 if a.draft:
     step("make_draft.py", a.name, title, "--cover", cover,
-         *(["--bgm", str(lib / "tracks" / versions[0]["bgm"])] if versions else []))
+         *(["--bgm", str(versions[0]["path"])] if versions else []))
 notes = (WORK / "notes.md").read_text(encoding="utf-8") if (WORK / "notes.md").is_file() else ""
+bgm_lines = (f"（来源：{versions[0]['source']}）" if versions else "") + (f"\n- 注意：{bgm_note}" if bgm_note else "") + (
+    "\n- 我的BGM 里的曲子请自己确认有使用权；需要署名的，在曲子旁边放一个同名 .txt，第一行写署名"
+    if versions and versions[0]["source"] == "我的BGM" else "")
 qa_rows = "\n".join(f"| {'✓' if c['ok'] else ('✗' if c['level'] == 'fail' else '!')} | {c['item']} | {c['detail']} |"
                     for c in qa["checks"])
 report = f"""# {title}（全自动生成，{dt.date.today().isoformat()}）
@@ -203,15 +252,16 @@ report = f"""# {title}（全自动生成，{dt.date.today().isoformat()}）
 | 文件 | 说明 |
 |---|---|
 | `{title}-成片.mp4` | 1080p 成片{('，BGM：' + versions[0]['title']) if versions else '（没有 BGM）'} |
+| `{title}-无BGM版.mp4` | {'只有配音和动作原声：想在抖音里选热门音乐时，上传这个' if versions else '（本次没有：成片本来就没有 BGM）'} |
 | `BGM备选/` | 换了 BGM 的同一条片子{'' if len(versions) > 1 else '（本次没有）'} |
 | `手机预览/` | 720p 压缩版，方便手机上看 |
 | `封面.jpg` | 第一个镜头 + 商品名 |
-| `发布文案.txt` | 发布时贴进抖音简介，**含 BGM 署名，必须保留** |
+| `发布文案.txt` | 发布时贴进抖音简介{'，**含 BGM 署名，必须保留**' if credit else ''} |
 | `字幕.srt`、`质检.json` | 字幕文件、自动质检结果 |
 
 - 时长 {render_out['duration']} 秒，{render_out['shots']} 个镜头（平均 {render_out['avg_shot_s']} 秒），字幕样式「{render_out.get('caption_style')}」
 - 配音：{voice_label}，{narr.get('cps')} 字/秒，对齐方式：{'语音识别逐字对齐' if narr.get('timing', 'asr') == 'asr' else '按字数估算（没有百炼 Key）'}
-- BGM：{'；'.join(v['title'] for v in versions) or '无'}（Kevin MacLeod，CC BY 4.0，需署名）
+- BGM：{'；'.join(v['title'] for v in versions) or '无'}{bgm_lines}
 
 ## 自动质检：{'通过' if qa['passed'] else '有不合格项，见下表'}
 
@@ -236,6 +286,7 @@ report = f"""# {title}（全自动生成，{dt.date.today().isoformat()}）
 (deliv / "先看这里.md").write_text(report, encoding="utf-8")
 summary = {"delivery": str(deliv), "main": str(deliv / f"{title}-成片.mp4"), "voice": voice_label,
            "caption_style": render_out.get("caption_style"), "bgm": [v["title"] for v in versions],
+           "bgm_source": versions[0]["source"] if versions else None, "no_bgm": str(no_bgm) if versions else None,
            "qa_passed": qa["passed"], "hard_fails": qa["hard_fails"], "warnings": qa["warnings"]}
 print(json.dumps(summary, ensure_ascii=False, indent=1))
 sys.exit(0 if qa["passed"] else 2)
