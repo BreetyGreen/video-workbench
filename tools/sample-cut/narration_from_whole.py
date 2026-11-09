@@ -95,6 +95,9 @@ else:
         t0, t1 = total * k / len(orig), total * (k + 1) / len(orig)
         times.append((t0, t1))
 
+    def at(i, edge):  # proportional time of character i
+        return times[i][edge]
+
     def snap(t):
         near = min(pauses, key=lambda x: abs(x - t), default=None)
         return near if near is not None and abs(near - t) <= 0.35 else t
