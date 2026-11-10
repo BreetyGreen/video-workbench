@@ -2,7 +2,8 @@
 
 usage: python autopilot_setup.py [--own-voice my.wav --own-voice-text "录音原话"] [--cloud-voice longxiaochun_v2]
                                  [--deliveries <dir>] [--jianying-draft] [--no-cloud-asr]
-Voices: add presets with voices.py (--own-voice is the older single-voice form; it becomes the preset 我的声音).
+Voices: installs the built-in voice pack (voices.py pack: AISHELL-3 speakers, Apache-2.0), so videos get a
+matching voice with no recording. Add your own with voices.py add (--own-voice is the older single-voice form).
 BGM: creates the 我的BGM folder (my_bgm.py); tracks put there are used before the built-in library.
 writes <data_home>/sample-cut.json. Never asks for or prints a key: a DashScope key is read from the environment only.
 """
@@ -62,6 +63,7 @@ def run(script, *args):
 
 if not a.skip_downloads:
     run("fonts_download.py")
+    run("voices.py", "pack")  # ~8 MB of short clips; previews are made on demand (voices.py pack --preview)
     bgm = Path(os.environ.get("VIDEO_WORKBENCH_BGM_DIR") or data_home() / "bgm-library" / "incompetech")
     if not (bgm / "manifest.json").is_file():
         run("bgm_pick.py", "30") and run("bgm_download.py")
@@ -92,8 +94,9 @@ ready = {
     "cosyvoice_installed": cv_ok,
     "voices": [v["name"] for v in presets],
     "default_voice": default_voice,
-    "voice_route": (f"本机 CosyVoice，音色「{default_voice or presets[0]['name']}」" if presets and cv_ok else
-                    "本机 CosyVoice 示例音色（仅演示：用 voices.py add 加入你的声音）" if cv_ok else
+    "voice_route": ((f"本机 CosyVoice，默认音色「{default_voice}」" if default_voice else
+                     f"本机 CosyVoice，{len(presets)} 个音色，按产品自动匹配") if presets and cv_ok else
+                    "本机 CosyVoice 示例音色（仅演示：音色包没装上，运行 voices.py pack）" if cv_ok else
                     f"云端 {cfg['cloud_voice']}（本机 CosyVoice 没装）" if key else
                     "缺：需要安装 CosyVoice（或百炼 Key）"),
     "timing": "语音识别逐字对齐（百炼）" if asr else "按字数估算（不联网）",

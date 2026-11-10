@@ -14,9 +14,16 @@ sc autopilot_setup.py            # fonts, BGM library, default settings, readine
 
 Exit code 1 means there is no voice route: no local CosyVoice (and no DashScope key either). In that case, tell the user exactly that, once, and stop. Otherwise continue.
 
-### Preset voices (one-time, when the user hands over recordings)
+### Voices
 
-The voice is local CosyVoice with a preset from the voice library. When the user gives you a recording for a preset:
+The voice is local CosyVoice with a preset from the voice library. `autopilot_setup.py` installs the built-in pack (`voices.py pack`): adult speakers of the AISHELL-3 corpus (Apache-2.0, recorded for TTS), tagged by gender, age group and pitch, spoken in the `sales` style. With no voice named and no default set, `produce.py` matches a voice to the product's mood on its own and writes the reason into `先看这里.md`. Don't ask the user which voice to use.
+
+```bash
+sc voices.py match              # which voice this project gets, and why
+sc voices.py pack --preview     # 试听.wav for every pack voice (slow on CPU; only when the user wants to listen)
+```
+
+When the user gives you a recording of their own for a preset:
 
 ```bash
 sc voices.py add "<录音文件>" --name 女声活泼 --text "<录音里的每一个字>" --consent own [--tags 女声,活泼] [--preview]
@@ -25,7 +32,7 @@ sc voices.py list            # presets, which one is default, preview files
 sc voices.py default <name>  # used when a video doesn't name a voice
 ```
 
-- Ask once who is speaking, if the user hasn't said. Only the user's own voice (`own`) or a person who gave written permission (`permission`, with `--who`). Refuse recordings cut from other people's videos, livestreams or ads, and any "主播/明星音色" model, whatever the purpose.
+- Ask once who is speaking, if the user hasn't said. Only the user's own voice (`own`) or a person who gave written permission (`permission`, with `--who`). Refuse recordings cut from other people's videos, livestreams or ads, voices copied out of Jianying or other apps' voice libraries, and any "主播/明星音色" model, whatever the purpose.
 - `--text` must match the recording word for word. If the user didn't give it, listen with them or ask them to type it. Don't guess.
 - 5-15 s of clean speech, one speaker, no music. The tool trims silence and levels the volume.
 - `--preview` makes `试听.wav` in the preset folder (a few minutes on CPU). Send it to the user to approve.
@@ -92,7 +99,7 @@ Write `copy.json`, following the structure of `examples/copy.json`. The rules:
 - Each sentence's `shots` must be types that exist in `selected-takes.json`. Optional `emphasis` takes 1-2 words of that sentence to highlight.
 - `style` is optional. Leave it out for the automatic pick, or choose one from `styles.json` that fits the product mood.
 - `post_caption` is optional: one short line for the Douyin caption. Facts only, no hashtags spam.
-- `voice` is optional: the name of a preset from `voices.py list`. Leave it out to use the default voice. Use it only when the user asked for a specific voice for this product.
+- `voice` is optional: the name of a preset from `voices.py list`. Leave it out for the automatic match (or the default voice, if one is set). Use it only when the user asked for a specific voice for this product. `voice_style` is optional too (`none`, `sales`, `happy`, `fast`, `soft`).
 
 Then:
 
@@ -130,7 +137,7 @@ Send the main video (and phone preview) and summarise in a few lines:
 ## Hard rules
 
 - Copy facts come only from the package (step 4). `copy_check.py` must pass.
-- Voice is local CosyVoice with a preset of the user's **own** voice or a voice with written permission (`voices.py add --consent own|permission`). The cloud voice is only a fallback when CosyVoice isn't installed. Never clone a voice taken from other videos or a third-party model of a real or branded voice.
+- Voice is local CosyVoice with a preset from the built-in pack (openly licensed AISHELL-3 speakers), the user's **own** voice, or a voice with written permission (`voices.py add --consent own|permission`). The cloud voice is only a fallback when CosyVoice isn't installed. Never clone a voice taken from other videos, from Jianying or another app's voice library, or a third-party model of a real or branded voice.
 - BGM comes from the user's 我的BGM folder (the user is responsible for the rights to tracks they put there) or the built-in CC BY library, with its credit in the caption. Never download Douyin or Jianying library music, or music ripped from other videos. If you fetch tracks for the user, take them only from sources whose license allows use in commercial videos (Pixabay Music, Mixkit, Uppbeat with its credit line). For trending songs, point them to Douyin's in-app music with the 无BGM版.
 - Never publish, log in, or press anything on Douyin for the user.
 - Never edit or delete the user's footage. Never modify existing Jianying drafts (the `--draft` option only adds a new one).

@@ -12,6 +12,7 @@ on:
       - "tools/sample-cut/narration_from_whole.py"
       - "tools/sample-cut/vw_common.py"
       - "tools/sample-cut/voices.py"
+      - "tools/sample-cut/voice_pack.json"
       - "tools/sample-cut/my_bgm.py"
       - "tools/sample-cut/add_bgm.py"
       - ".github/workflows/mac-acceptance.yml"

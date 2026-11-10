@@ -134,12 +134,26 @@ def vcli(*args):
                           text=True, encoding="utf-8", errors="replace")
 
 
-r1 = vcli("add", rec, "--name", "测试 女声", "--text", "宝子们看过来这款真的超好喝冰冰凉凉一口", "--consent", "own")
+r1 = vcli("add", rec, "--name", "测试 女声", "--text", "宝子们看过来这款真的超好喝冰冰凉凉一口", "--consent", "own", "--default")
 r2 = vcli("add", rec, "--name", "别人", "--text", "宝子们看过来这款真的超好喝冰冰凉凉一口", "--consent", "permission")
 lst = json.loads(vcli("list").stdout)
 v0 = lst["voices"][0] if lst["voices"] else {}
 checks["voice_add"] = r1.returncode == 0 and v0.get("name") == "测试_女声" and v0.get("default") and 6.5 < v0["seconds"] < 7.5
 checks["voice_permission_needs_who"] = r2.returncode != 0 and len(lst["voices"]) == 1
+# automatic matching (no network: fake library): product mood -> gender/age/pitch tags, the user's own voices first
+import voices  # noqa: E402
+
+fake = [{"name": n, "consent": c, "tags": tags} for n, c, tags in [
+    ("青年女声-高音1", "licensed", ["女声", "青年", "高音"]), ("成熟女声-低音1", "licensed", ["女声", "成熟", "低音"]),
+    ("青年男声-中音1", "licensed", ["男声", "青年", "中音"]), ("示例", "demo", [])]]
+pick_of = lambda product, lib=fake: voices.match({"product": product, "sentences": []}, lib)[0]["name"]
+checks["voice_match_mood"] = (pick_of("葡式蛋挞") == "青年女声-高音1" and pick_of("婴儿湿巾") == "成熟女声-低音1"
+                              and pick_of("香辣火锅底料") == "青年男声-中音1")
+checks["voice_match_own_first"] = pick_of("葡式蛋挞", fake + [{"name": "我", "consent": "own", "tags": []}]) == "我"
+pack = json.loads((HERE / "voice_pack.json").read_text(encoding="utf-8"))
+checks["voice_pack_file"] = (len(pack["voices"]) >= 12 and pack["license"] == "Apache-2.0"
+                             and all(len(v["sha256"]) == 64 and v["text"] and {"女声", "男声"} & set(v["tags"])
+                                     for v in pack["voices"]) and len({v["name"] for v in pack["voices"]}) == len(pack["voices"]))
 (out_dir / "my-bgm").mkdir(exist_ok=True)
 run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=660:sample_rate=48000:d=3", "-c:a", "libmp3lame",
      out_dir / "my-bgm" / "短曲.mp3"])
