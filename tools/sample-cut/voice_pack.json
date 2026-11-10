@@ -1,0 +1,337 @@
+{
+ "_doc": "Built-in voice pack for local CosyVoice: one short clip per adult speaker (age groups 14-25, 26-40, 41+; no children) of the AISHELL-3 corpus, which was recorded and released under Apache-2.0 for multi-speaker TTS. voices.py pack downloads the clips (not stored in this repo), checks sha256 and registers them. Tags: gender and age group from the corpus' spk-info.txt, pitch tier from the measured median F0.",
+ "source": "AISHELL-3 (Beijing Shell Shell Technology, https://www.openslr.org/93/, arXiv:2010.11567)",
+ "license": "Apache-2.0",
+ "mirrors": [
+  "https://hf-mirror.com/datasets/AISHELL/AISHELL-3/resolve/main/train/wav",
+  "https://huggingface.co/datasets/AISHELL/AISHELL-3/resolve/main/train/wav"
+ ],
+ "style": "sales",
+ "voices": [
+  {
+   "name": "成熟女声-低音1",
+   "speaker": "SSB0671",
+   "file": "SSB06710051.wav",
+   "text": "目前项目每天来电的咨询量已经翻了几番",
+   "sha256": "37c8fd1b55156aa8766690974728424e24d7f29ad2605d33ff503cc61081bf22",
+   "f0": 186.0,
+   "tags": [
+    "女声",
+    "成熟",
+    "低音"
+   ]
+  },
+  {
+   "name": "年长女声-低音1",
+   "speaker": "SSB0309",
+   "file": "SSB03090008.wav",
+   "text": "自住和改善性需求将是楼市赠政策的重要导向",
+   "sha256": "1842e2ccbe07d374217b127face9c11065b66058b9b2d5cd91b0bcf9dc6cd218",
+   "f0": 192.8,
+   "tags": [
+    "女声",
+    "年长",
+    "低音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟女声-中音1",
+   "speaker": "SSB0534",
+   "file": "SSB05340001.wav",
+   "text": "登顶最佳影片最佳导演最佳女配角三项大奖",
+   "sha256": "6299a0caea38ea1e42b1424d6a53c5b8db1540522fa6ab501b81684f575cb1fd",
+   "f0": 205.1,
+   "tags": [
+    "女声",
+    "成熟",
+    "中音"
+   ]
+  },
+  {
+   "name": "青年女声-中音1",
+   "speaker": "SSB0748",
+   "file": "SSB07480007.wav",
+   "text": "要求业务转让须征得相关投保人被保险人同意",
+   "sha256": "a9981a681a9cfdc9d83048be9b038023f04fd57786c551b5f981a5b79af722d9",
+   "f0": 205.1,
+   "tags": [
+    "女声",
+    "青年",
+    "中音"
+   ]
+  },
+  {
+   "name": "青年女声-中音2",
+   "speaker": "SSB0057",
+   "file": "SSB00570011.wav",
+   "text": "现代农贸最大的问题是农产品种植区没有卖权",
+   "sha256": "a4f1235bcf3f9a4f80a40e876f56e08dd2628de18428f00c2ab71563091cdc6b",
+   "f0": 210.5,
+   "tags": [
+    "女声",
+    "青年",
+    "中音"
+   ]
+  },
+  {
+   "name": "青年女声-中音3",
+   "speaker": "SSB0778",
+   "file": "SSB07780075.wav",
+   "text": "电视面板产能扩张何时会触碰到市场红线",
+   "sha256": "a2fde7ccaebfcc084d6fab0c84de24fda9df422c333db5e5d96950ce98f48cdf",
+   "f0": 213.3,
+   "tags": [
+    "女声",
+    "青年",
+    "中音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟女声-中音2",
+   "speaker": "SSB0011",
+   "file": "SSB00110003.wav",
+   "text": "基层医院的医生缺乏不断学习和提高水平的动力",
+   "sha256": "73cca1a27e6417fe14e3d8b7b6d67e726e292670abc3d51a057b405560d2be60",
+   "f0": 225.4,
+   "tags": [
+    "女声",
+    "成熟",
+    "中音"
+   ]
+  },
+  {
+   "name": "成熟女声-中音3",
+   "speaker": "SSB0599",
+   "file": "SSB05990006.wav",
+   "text": "但仅从事车辆房地产等实物交易的交易场所除外",
+   "sha256": "9faf42c5a31255aa30208fce4c3b7c62d1c478effd61bca0016a19620ba9c7ff",
+   "f0": 222.2,
+   "tags": [
+    "女声",
+    "成熟",
+    "中音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟女声-高音1",
+   "speaker": "SSB0614",
+   "file": "SSB06140050.wav",
+   "text": "贯穿狗的一生都可以使用间歇的食物奖励",
+   "sha256": "4639271dc0f5186bdddc7174941edc43e3f97d60ef4e389217095ad605f63eb1",
+   "f0": 254.0,
+   "tags": [
+    "女声",
+    "成熟",
+    "高音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "青年女声-中音4",
+   "speaker": "SSB0578",
+   "file": "SSB05780033.wav",
+   "text": "人们对语音助手的协助功能远没有人们想的那么大",
+   "sha256": "a66b90b1f0b9280b1f331209481400cba8396dcdea39c91542871f1d393fe417",
+   "f0": 235.3,
+   "tags": [
+    "女声",
+    "青年",
+    "中音"
+   ]
+  },
+  {
+   "name": "青年女声-高音1",
+   "speaker": "SSB0470",
+   "file": "SSB04700007.wav",
+   "text": "我想就和水费及其他各种各样费用的上涨谈谈看法",
+   "sha256": "42cb5b20bed8e2f544e1554ba0673c1a03fbcda209f11df001ae6c950b4a1ca3",
+   "f0": 246.2,
+   "tags": [
+    "女声",
+    "青年",
+    "高音"
+   ]
+  },
+  {
+   "name": "青年女声-高音2",
+   "speaker": "SSB0382",
+   "file": "SSB03820002.wav",
+   "text": "过去十年十万元能够购买的房子面积下降了百分之六十",
+   "sha256": "edd58ded93a36561aac392e5bc94e97c92b62a72504e0c68b0d5a04959252c62",
+   "f0": 262.3,
+   "tags": [
+    "女声",
+    "青年",
+    "高音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "青年女声-高音3",
+   "speaker": "SSB0005",
+   "file": "SSB00050023.wav",
+   "text": "一百家新型产业公司平均实现营业收入四亿元",
+   "sha256": "bc93f423b44b047ee97590211941965b9ab020391afcea2b6f05ea91be06913c",
+   "f0": 246.2,
+   "tags": [
+    "女声",
+    "青年",
+    "高音"
+   ]
+  },
+  {
+   "name": "青年男声-低音1",
+   "speaker": "SSB0603",
+   "file": "SSB06030021.wav",
+   "text": "尚在发展初期的高科技企业则可能会受到很大冲击",
+   "sha256": "94ce9ecbf668713e2f7898259df9dce069ca5095905c2e17f5cc23f4bc3b75c8",
+   "f0": 126.0,
+   "tags": [
+    "男声",
+    "青年",
+    "低音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "青年男声-低音2",
+   "speaker": "SSB0535",
+   "file": "SSB05350012.wav",
+   "text": "物联网行业目前最大的问题就是大家各自为政",
+   "sha256": "7970440ef54d4fa8104ff26ab56ac668ae9e4ddb2a128d030357cd01582eca82",
+   "f0": 128.0,
+   "tags": [
+    "男声",
+    "青年",
+    "低音"
+   ]
+  },
+  {
+   "name": "青年男声-中音1",
+   "speaker": "SSB0073",
+   "file": "SSB00730012.wav",
+   "text": "其目的是确保一个完成和公正的严格检测体系",
+   "sha256": "7482cb717f3e8cf26357b3491faddd3cb67bec4bc6b341d7660f89a78b76f1e8",
+   "f0": 139.1,
+   "tags": [
+    "男声",
+    "青年",
+    "中音"
+   ]
+  },
+  {
+   "name": "成熟男声-中音1",
+   "speaker": "SSB0609",
+   "file": "SSB06090008.wav",
+   "text": "大河报记者也接到市民报料电话反映此事",
+   "sha256": "55a777ea2f3535ce33af56a924c0f9b7f4346bfa8d346fffa0f70ef0a29d4c1f",
+   "f0": 137.9,
+   "tags": [
+    "男声",
+    "成熟",
+    "中音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "年长男声-中音1",
+   "speaker": "SSB0434",
+   "file": "SSB04340031.wav",
+   "text": "其中最主要的部分就是建立房地产价格评估体系",
+   "sha256": "fa1312efeee165024ab389ca08d1a3ce929cd1d3af602a5620241015a9bf261a",
+   "f0": 140.4,
+   "tags": [
+    "男声",
+    "年长",
+    "中音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "青年男声-中音2",
+   "speaker": "SSB0629",
+   "file": "SSB06290013.wav",
+   "text": "均已被纳入二零二二年冬奥会的规划场馆",
+   "sha256": "697baa420f600fbde2d33093873d818db6ebd3e8fb0d6c7da85691b2c9de2950",
+   "f0": 144.1,
+   "tags": [
+    "男声",
+    "青年",
+    "中音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟男声-高音1",
+   "speaker": "SSB0784",
+   "file": "SSB07840008.wav",
+   "text": "需要用改革激发农村各个个体的生产积极性",
+   "sha256": "98fb7409f54025c73b2a34bdaa8508c39b904dcb9a9e661a06672b2b17338cbe",
+   "f0": 163.3,
+   "tags": [
+    "男声",
+    "成熟",
+    "高音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟男声-高音2",
+   "speaker": "SSB0261",
+   "file": "SSB02610008.wav",
+   "text": "让他们在比赛中面对高手完全没有了畏惧感",
+   "sha256": "3102548a86d2ad346f241a89cd5fdefb0944c8ca52331f0d7934549f30b34da7",
+   "f0": 172.0,
+   "tags": [
+    "男声",
+    "成熟",
+    "高音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "成熟男声-高音3",
+   "speaker": "SSB0590",
+   "file": "SSB05900020.wav",
+   "text": "所发生的买卖双方签订合同的行为应该被认为有效",
+   "sha256": "406933649220149fc4e3644f4dc6d0ef7dd6e03f25eb36d33ba5e0a88d74b2f5",
+   "f0": 175.8,
+   "tags": [
+    "男声",
+    "成熟",
+    "高音"
+   ]
+  },
+  {
+   "name": "成熟男声-高音4",
+   "speaker": "SSB0710",
+   "file": "SSB07100096.wav",
+   "text": "并接受上级不动产登记主管部门的指导监督",
+   "sha256": "ff10ce00b4f4d864f72af50b555b708b28c4e4b0ce5031c5a22d04fc238b88a0",
+   "f0": 188.2,
+   "tags": [
+    "男声",
+    "成熟",
+    "高音",
+    "活泼"
+   ]
+  },
+  {
+   "name": "青年男声-高音1",
+   "speaker": "SSB0316",
+   "file": "SSB03160004.wav",
+   "text": "此番计划对住房保障信息公开也做了明确要求",
+   "sha256": "0b29860dab540da40601d47df20b765dfaf8df9d76670cfe046248fc13d190e7",
+   "f0": 183.9,
+   "tags": [
+    "男声",
+    "青年",
+    "高音",
+    "活泼"
+   ]
+  }
+ ]
+}

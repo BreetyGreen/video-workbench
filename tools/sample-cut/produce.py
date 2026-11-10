@@ -4,7 +4,7 @@ usage (inside the project work dir, after takes/selected-takes.json, copy.json a
   python produce.py [--voice-name 女声活泼] [--voice auto|local|cloud] [--bgm-versions 3] [--bgm-lufs -20] [--draft]
                    [--narration voice/x/narration]   (reuse an approved voice instead of synthesizing)
 voice: local CosyVoice with a preset from the voice library (voices.py), picked by --voice-name > copy.json "voice" >
-       default_voice > first preset. The cloud voice is used only with --voice cloud or when CosyVoice isn't installed.
+       default_voice > automatic match by product mood (voices.py match). The cloud voice is used only with --voice cloud or when CosyVoice isn't installed.
 BGM:   tracks in the user's 我的BGM folder (my_bgm.py) first; the built-in CC BY library only when that folder is empty.
 steps: copy_check -> voice (whole script) -> narration timing -> render -> BGM versions -> QA -> cover ->
        phone previews -> delivery folder with 先看这里.md, 发布文案.txt, BGM credits, 无BGM版 (for Douyin's own music)
@@ -31,6 +31,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--voice", default=CFG.get("voice_engine", "auto"), choices=["auto", "cloud", "local"],
                 help="auto = local CosyVoice whenever it is installed; cloud only as a fallback")
 ap.add_argument("--voice-name", help="preset from the voice library (voices.py list)")
+ap.add_argument("--voice-style", choices=["none", "sales", "happy", "fast", "loud", "soft"],
+                help="speaking style for the local voice (default: the preset's own style)")
 ap.add_argument("--cloud-voice", default=CFG.get("cloud_voice", "longxiaochun_v2"))
 ap.add_argument("--bgm-versions", type=int, default=CFG.get("bgm_versions", 3))
 ap.add_argument("--bgm-lufs", type=float, default=CFG.get("bgm_lufs", -20.0),
@@ -98,9 +100,11 @@ else:
         import voices
         preset = voices.pick(a.voice_name, copy)
         if preset:
-            prompt, prompt_text, vstyle = preset["prompt"], preset["text"], preset.get("style") or "none"
+            prompt, prompt_text = preset["prompt"], preset["text"]
+            vstyle = a.voice_style or copy.get("voice_style") or preset.get("style") or "none"
             vdir = WORK / "voice" / voices.safe_name(preset["name"])
-            voice_label = f"本机 CosyVoice「{preset['name']}」（{preset['consent_label']}）"
+            voice_label = (f"本机 CosyVoice「{preset['name']}」（{preset['consent_label']}；{preset['why']}"
+                           + ("；带货语气" if vstyle == "sales" else "") + "）")
         else:  # empty library: CosyVoice's bundled sample, for trying the pipeline only
             prompt = str(cv_home / "asset" / "zero_shot_prompt.wav")
             prompt_text, vstyle = "希望你以后能够做的比我还好呦。", "none"

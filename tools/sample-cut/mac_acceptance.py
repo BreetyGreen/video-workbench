@@ -84,13 +84,10 @@ run(["ffmpeg", "-v", "error", "-y", "-i", str(lib / "tracks" / Path(bassy["file"
      str(my / "测试低音.mp3")])
 
 voice_args = []
-if voice == "local":  # a preset in the voice library (CosyVoice's own sample, consent "demo": tests only)
-    cv = Path(os.environ.get("COSYVOICE_HOME") or data_home() / "CosyVoice")
-    r = subprocess.run([sys.executable, str(HERE / "voices.py"), "add", str(cv / "asset" / "zero_shot_prompt.wav"),
-                        "--name", "验收示例", "--text", "希望你以后能够做的比我还好呦。", "--consent", "demo"], env=env)
+if voice == "local":  # the built-in voice pack; the video's voice must come from it by automatic matching
+    r = subprocess.run([sys.executable, str(HERE / "voices.py"), "pack"], env=env)
     if r.returncode:
-        raise SystemExit("voices.py add failed")
-    voice_args = ["--voice-name", "验收示例"]
+        raise SystemExit("voices.py pack failed")
 
 for script, args in (("make_spec.py", ["一茶茉莉白牡丹"]), ("copy_check.py", [])):
     r = subprocess.run([sys.executable, str(HERE / script), *args], env=env, cwd=work)
@@ -112,8 +109,9 @@ problems = [msg for ok, msg in [
     ((deliv / "一茶茉莉白牡丹-无BGM版.mp4").is_file(), "无BGM版 missing"),
     ("测试低音" in report, "the skipped bass-only track is not explained in 先看这里.md"),
     (melody["attribution"] in (deliv / "发布文案.txt").read_text(encoding="utf-8"), "credit line missing in 发布文案.txt"),
-    (voice != "local" or "验收示例" in summary["voice"], f"voice preset not used: {summary['voice']}"),
+    (voice != "local" or ("自动匹配" in summary["voice"] and "AISHELL-3" in summary["voice"]),
+     f"pack voice not auto-matched: {summary['voice']}"),
 ] if not ok]
 if problems:
     raise SystemExit("acceptance checks failed:\n- " + "\n- ".join(problems))
-print("acceptance checks passed (voice preset, 我的BGM, bass-only skip, looping short track, 无BGM版, credit)")
+print("acceptance checks passed (voice pack auto-match, 我的BGM, bass-only skip, looping short track, 无BGM版, credit)")
